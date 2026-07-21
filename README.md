@@ -1,0 +1,77 @@
+# Court hearing control for Pexip Webapp3
+
+Production-oriented Pexip toolbar plugin for moving cases between breakout waiting rooms and the main hearing.
+
+The chair chooses one non-empty breakout room. The plugin snapshots only that room's movable participants, admits exactly those UUIDs to `main`, and leaves every other waiting room untouched. Pause asks Pexip to return participants to their server-recorded previous rooms.
+
+## Production artifact
+
+Deploy only these generated files, preserving their relative path:
+
+```text
+dist/
+├── index.html
+└── assets/
+    └── index.js
+```
+
+Point the Pexip Webapp3 plugin configuration at the deployed `index.html`. The origin must be HTTPS and allowed by the Webapp3 customization.
+
+The artifact is standalone:
+
+- no backend, database, MMM API, CDN, font, image, or network fetch dependency;
+- the Pexip public plugin SDK is bundled into `assets/index.js`;
+- no hearing state, participant history, browser storage, or application messages are used;
+- Start and Pause are independent chair controls, so any chair can perform either operation;
+- no widget is used.
+
+MMM and its environment file are used only by the isolated live-validation script. They are not referenced by production code or included in `dist/`.
+
+## Safety behavior
+
+- The room selector includes non-empty breakout rooms only.
+- Pexip `api` control legs are excluded from participant moves.
+- Start uses `fromBreakoutUuid`, `toRoomUuid: "main"`, and an explicit participant UUID array.
+- Pause uses Pexip's standard `toRoomUuid: "previous"` destination with an empty participant list, allowing Pexip to return all eligible main-room participants to their server-recorded previous rooms.
+- The plugin never calls close-all or empty-all operations.
+- Actions are serialized within each plugin instance; repeated local clicks cannot overlap moves.
+- An explicit Pexip rejection leaves both independent controls available for a safe retry.
+- Both the documented no-body success response and the newer `{ status: 200 }` response are supported.
+- Legacy roster events and newer `participantsActivities` events are both consumed.
+
+## Chair workflow
+
+1. Click the play button, labelled **Start a case hearing**.
+2. Choose one waiting room; its current participant count is shown.
+3. Click **Start hearing**. Only that room's current participant snapshot is admitted.
+4. Any chair can click **Pause hearing and return participants to previous rooms**. Pexip performs the return using its own previous-room assignments.
+5. Repeat for the next waiting room.
+
+The interface follows the Webapp3 language selection in English or Dutch.
+
+## Build and verification
+
+Node.js 20.12.2 or newer is required for development only.
+
+```bash
+npm ci
+npm run check
+npm start -- --port 5175
+COURT_PLUGIN_TEST_URL=http://127.0.0.1:5175 npm run test:browser:evidence
+```
+
+`npm run check` performs formatting, lint, TypeScript checking, coverage tests, and a clean production build. The browser suite loads the real production plugin through a Pexip RPC simulator and regenerates nine screenshots.
+
+The authorized non-production Pexip validation is deliberately separate because it creates temporary rooms and participants:
+
+```bash
+npm run test:live:pexip
+```
+
+It uses the existing MMM test environment for credentials and join URLs, injects the exact `dist/` artifact only in its isolated browser context, creates two temporary case rooms, asserts the scoped Start payload and native previous-room Pause payload, observes Pexip SSE room membership, and cleans up in `finally`.
+
+See [release checklist](docs/RELEASE_CHECKLIST.md) and [visual evidence](docs/evidence/README.md).
+
+## Upgrade policy
+
+The runtime surface is intentionally small and uses `@pexip/plugin-api` calls. Pexip's documented `previous` destination is passed through the plugin bridge even though version 22.2.0's TypeScript `RoomID` declaration omits it. Before upgrading the bundled SDK or Webapp3, run the complete check, browser evidence suite, and live validation.

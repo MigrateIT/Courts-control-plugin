@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-07-20T22:25:39.207Z",
+  "appliesToPluginVersion": 3,
+  "supersededByPluginVersion": 4,
+  "currentVersionValidated": false,
+  "livePexipValidated": true,
+  "hearingHash": "295619c650aa",
+  "breakoutHashes": ["540839153d38", "3b2835b3b73e"],
+  "selectedBreakoutParticipantCount": 2,
+  "waitingBreakoutParticipantCount": 2,
+  "participantUuidRebindingValidated": true,
+  "returnDestinationReconnectObserved": false,
+  "liveEnvironmentNote": "The headless Webapp3 clients did not reconnect after their third room transfer; Pexip accepted the exact rebound-UUID return request with HTTP 200.",
+  "assertions": {
+    "pluginRegisteredInWebapp3": true,
+    "roomSelectionRendered": true,
+    "selectedRoomOnlyMovedToMain": true,
+    "otherWaitingRoomUnchangedDuringStart": true,
+    "selectedParticipantReturnAcceptedByPexip": true,
+    "transferredParticipantUuidsReconciled": true,
+    "otherWaitingRoomUnchangedDuringPause": true
+  },
+  "screenshots": [
+    "10-live-pexip-idle.png",
+    "11-live-pexip-room-selection.png",
+    "12-live-pexip-case-a-active.png",
+    "13-live-pexip-case-a-returned.png"
+  ]
+}

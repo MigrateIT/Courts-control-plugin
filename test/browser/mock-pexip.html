@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pexip hearing control validation</title>
+    <link rel="stylesheet" href="/test/browser/mock-pexip.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Non-production validation hearing</p>
+        <h1>Rechtbank Midden-Nederland · Courtroom 4</h1>
+      </div>
+      <div class="security"><span></span> Secure meeting</div>
+    </header>
+
+    <main>
+      <section class="stage" aria-label="Main hearing stage">
+        <div class="stage-heading">
+          <div>
+            <p class="eyebrow">Main hearing</p>
+            <h2>Current participants</h2>
+          </div>
+          <span id="main-count" class="count"></span>
+        </div>
+        <div id="main-participants" class="participant-grid"></div>
+      </section>
+
+      <aside class="waiting-panel">
+        <div class="stage-heading">
+          <div>
+            <p class="eyebrow">Case queue</p>
+            <h2>Waiting rooms</h2>
+          </div>
+          <span class="queue-status">2 cases</span>
+        </div>
+        <div id="rooms" class="rooms"></div>
+      </aside>
+    </main>
+
+    <footer class="toolbar">
+      <div class="toolbar-left">
+        <button class="round-control" aria-label="Mute">●</button>
+        <button class="round-control" aria-label="Camera">▣</button>
+        <button class="round-control" aria-label="Present">↥</button>
+      </div>
+      <div id="plugin-toolbar" class="plugin-toolbar"></div>
+      <button class="leave">Leave</button>
+    </footer>
+
+    <div id="modal-root"></div>
+    <div id="toast-root" aria-live="polite"></div>
+    <iframe
+      id="plugin-frame"
+      title="Court hearing control plugin"
+      src="/"
+    ></iframe>
+    <script type="module" src="/test/browser/mock-pexip.js"></script>
+  </body>
+</html>

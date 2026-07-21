@@ -1,0 +1,4 @@
+assets/
+coverage/
+dist/
+package-lock.json
