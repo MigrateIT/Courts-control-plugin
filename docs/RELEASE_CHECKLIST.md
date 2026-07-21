@@ -12,7 +12,7 @@
 - [x] Production and development dependency audits report zero known vulnerabilities.
 - [x] Browser RPC simulation validates two independent waiting rooms, sequential hearings, busy guards, and failure retention.
 - [x] Real Webapp3 loads the exact production artifact and renders the chair-only toolbar control and native room-selection form.
-- [x] Real Pexip accepts the selected-room-to-main request with two explicit UUIDs and HTTP 200.
+- [ ] Real Pexip accepts the selected-room-to-main request with an empty participant list, moves all eligible waiting participants, and leaves `api` observer legs in the breakout.
 - [ ] Real Pexip accepts the native `previous` destination with an empty participant list through the deployed Webapp3 plugin bridge.
 - [x] The other waiting room remains unchanged through both plugin operations.
 - [x] Temporary Pexip rooms and sessions are closed in a `finally` cleanup path.
@@ -26,13 +26,14 @@
 4. Confirm only chair users see the two separate toolbar controls: play for **Start a case hearing** and pause for **Pause hearing and return participants to previous rooms**.
 5. Confirm both controls remain visible rather than replacing or toggling each other.
 6. Start one disposable case and verify both controls remain disabled for the complete 10-second Start hold and the second room count is unchanged.
-7. Pause it and verify the same people arrive back in the original room.
-8. Confirm another chair can use the independent Pause control without receiving state from the chair who started the hearing.
-9. Retain the prior plugin URL for immediate configuration rollback.
+7. Confirm any `api` observer leg remains in the selected breakout after the case participants enter the main room.
+8. Pause it and verify the same people arrive back in the original room.
+9. Confirm another chair can use the independent Pause control without receiving state from the chair who started the hearing.
+10. Retain the prior plugin URL for immediate configuration rollback.
 
 ## Live-test caveat
 
-The prior live result covered an explicit room-UUID return and does not validate the new native `previous` call. Run `npm run test:live:pexip` before release. The simulated production-bundle suite verifies completed previous-room membership; the deployment-day disposable-room check above remains the final operational gate.
+The prior live result covered explicit participant UUIDs and an explicit room-UUID return. It does not validate the new empty-list Start or native `previous` call. Run `npm run test:live:pexip` before release. The simulated production-bundle suite verifies API observer retention and completed previous-room membership; the deployment-day disposable-room check above remains the final operational gate.
 
 ## Rollback
 

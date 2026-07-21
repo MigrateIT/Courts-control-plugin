@@ -32,7 +32,13 @@ try {
     .getByTestId("room-select")
     .locator("option")
     .allTextContents();
-  if (options.at(-1) !== "Admit all waiting rooms at once") {
+  if (
+    options.length !== 3 ||
+    options[0] !== "Case 2026-0412 (2)" ||
+    options[1] !== "Case 2026-0413 (2)" ||
+    options.at(-1) !== "Admit all waiting rooms at once" ||
+    options.some((option) => option.includes("Observer only"))
+  ) {
     throw new Error(`Unexpected final room option: ${JSON.stringify(options)}`);
   }
   await page.getByTestId("form-close").click();
@@ -101,16 +107,24 @@ try {
   if (
     snapshot.main.join(",") !==
       "clerk-chair,court-chair,case-b-bob,case-b-interpreter" ||
-    snapshot["breakout-case-a"].join(",") !== "case-a-alice,case-a-counsel" ||
-    snapshot["breakout-case-b"].length !== 0
+    snapshot["breakout-case-a"].join(",") !==
+      "mmm-observer-a,case-a-alice,case-a-counsel" ||
+    snapshot["breakout-case-b"].join(",") !== "mmm-observer-b" ||
+    snapshot["breakout-observer-only"].join(",") !== "mmm-observer-only"
   ) {
     throw new Error(
       `Unexpected final room membership: ${JSON.stringify(snapshot)}`,
     );
   }
   const expectedReturns = [moveRequests[1], moveRequests[3]];
+  const expectedStarts = [moveRequests[0], moveRequests[2]];
   if (
     moveRequests.length !== 4 ||
+    expectedStarts.some(
+      (request) =>
+        request?.participants?.length !== 0 ||
+        request.participants.some((id) => id.endsWith("-control")),
+    ) ||
     expectedReturns.some(
       (request) =>
         request?.toRoomUuid !== "previous" ||

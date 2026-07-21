@@ -41,34 +41,20 @@ plugin.events.conferenceStatus.add(({ id, status }) => {
   scheduleReconcile();
 });
 
-plugin.events.me.add(({ id, participant }) => {
-  directory.recordParticipant(id, participant);
+plugin.events.breakoutBegin.add(({ breakout_uuid: roomId }) => {
+  directory.recordBreakout(asBreakoutRoomId(roomId));
+  scheduleReconcile();
 });
-
-plugin.events.breakoutBegin.add(
-  ({ breakout_uuid: roomId, participant_uuid: participantId }) => {
-    directory.recordBreakout(asBreakoutRoomId(roomId), participantId);
-    scheduleReconcile();
-  },
-);
 
 plugin.events.breakoutEnd.add(({ breakout_uuid: roomId }) => {
   directory.removeBreakout(asBreakoutRoomId(roomId));
   scheduleReconcile();
 });
 
+// participantsActivities reports changes after subscription. The room-scoped
+// snapshot supplies participants who were already waiting when the plugin loaded.
 plugin.events.participants.add(({ id, participants }) => {
   directory.replaceParticipants(id, participants);
-  scheduleReconcile();
-});
-
-plugin.events.participantJoined.add(({ id, participant }) => {
-  directory.recordParticipant(id, participant);
-  scheduleReconcile();
-});
-
-plugin.events.participantLeft.add(({ participant }) => {
-  directory.removeParticipant(participant.uuid);
   scheduleReconcile();
 });
 

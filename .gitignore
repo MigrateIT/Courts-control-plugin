@@ -3,3 +3,4 @@ coverage/
 dist/
 *.log
 .env
+pexip-courts-control-plugin/

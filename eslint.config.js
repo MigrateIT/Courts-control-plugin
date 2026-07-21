@@ -45,6 +45,11 @@ export default [
   },
   prettier,
   {
-    ignores: ["assets/**", "coverage/**", "dist/**"],
+    ignores: [
+      "assets/**",
+      "coverage/**",
+      "dist/**",
+      "pexip-courts-control-plugin/**",
+    ],
   },
 ];

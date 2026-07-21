@@ -12,26 +12,29 @@ const participantOne = "participant-1" as ParticipantID;
 const participantTwo = "participant-2" as ParticipantID;
 
 function room(
+  id = roomId,
+  name = "Case A",
   participantIds: ParticipantID[] = [participantOne, participantTwo],
 ): RoomSummary {
-  return { id: roomId, name: "Case A", participantIds };
+  return { id, name, participantIds };
 }
 
 describe("HearingController", () => {
-  it("moves only the selected room participant snapshot into main", async () => {
+  it("uses the roster count but asks Pexip to move everyone", async () => {
     const moveParticipants =
       vi.fn<(request: MoveParticipantsRequest) => Promise<unknown>>();
     moveParticipants.mockResolvedValue(undefined);
     const controller = new HearingController({ moveParticipants });
 
-    await expect(
-      controller.start(room([participantOne, participantOne, participantTwo])),
-    ).resolves.toEqual({ roomName: "Case A", participantCount: 2 });
+    await expect(controller.start(room())).resolves.toEqual({
+      roomName: "Case A",
+      participantCount: 2,
+    });
     expect(moveParticipants).toHaveBeenCalledOnce();
     expect(moveParticipants).toHaveBeenCalledWith({
       fromBreakoutUuid: roomId,
       toRoomUuid: "main",
-      participants: [participantOne, participantTwo],
+      participants: [],
     });
   });
 
@@ -46,13 +49,13 @@ describe("HearingController", () => {
     });
   });
 
-  it("refuses to start an empty room without calling Pexip", async () => {
+  it("refuses rooms without movable participants", async () => {
     const moveParticipants = vi.fn().mockResolvedValue(undefined);
     const controller = new HearingController({ moveParticipants });
 
-    await expect(controller.start(room([]))).rejects.toBeInstanceOf(
-      EmptyRoomError,
-    );
+    await expect(
+      controller.startAll([room(roomId, "Observer only", [])]),
+    ).rejects.toBeInstanceOf(EmptyRoomError);
     expect(moveParticipants).not.toHaveBeenCalled();
   });
 
@@ -105,20 +108,22 @@ describe("HearingController", () => {
     const controller = new HearingController({ moveParticipants });
 
     await controller.start(room());
-    await controller.start(room(["other" as ParticipantID]));
+    await controller.start(
+      room("room-case-b" as Exclude<RoomID, "main">, "Case B"),
+    );
     expect(moveParticipants).toHaveBeenCalledTimes(2);
   });
 
-  it("starts all non-empty rooms together", async () => {
+  it("starts all non-empty rooms with independent room-scoped moves", async () => {
     const moveParticipants = vi.fn().mockResolvedValue(undefined);
     const controller = new HearingController({ moveParticipants });
     const secondRoomId = "room-case-b" as Exclude<RoomID, "main">;
 
     await expect(
       controller.startAll([
-        room([participantOne]),
-        { id: roomId, name: "Empty", participantIds: [] },
-        { id: secondRoomId, name: "Case B", participantIds: [participantTwo] },
+        room(roomId, "Case A", [participantOne]),
+        room(roomId, "Observer only", []),
+        room(secondRoomId, "Case B", [participantTwo]),
       ]),
     ).resolves.toEqual({
       roomName: "Case A, Case B",
@@ -128,7 +133,7 @@ describe("HearingController", () => {
     expect(moveParticipants).toHaveBeenNthCalledWith(2, {
       fromBreakoutUuid: secondRoomId,
       toRoomUuid: "main",
-      participants: [participantTwo],
+      participants: [],
     });
   });
 });

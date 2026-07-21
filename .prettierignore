@@ -2,3 +2,4 @@ assets/
 coverage/
 dist/
 package-lock.json
+pexip-courts-control-plugin/

@@ -2,7 +2,7 @@
 
 All images are 1440×1000 PNG captures. Files 01–09 use the current production bundle in a deterministic Pexip RPC browser simulator. Files 10–13 are historical captures from plugin version 3 in the authorized non-production Pexip Webapp3 environment.
 
-The intended current design uses two simultaneously visible chair-toolbar controls: a play button for Start and a pause button for the native previous-room return. The controls do not replace or toggle each other. Both are disabled while a move is in progress, including the complete 10-second Start hold.
+The intended current design uses two simultaneously visible chair-toolbar controls: a play button for Start and a pause button for the native previous-room return. The controls do not replace or toggle each other. Both are disabled while a move is in progress, including the complete 10-second Start hold. The simulator includes an `api` observer in each case room and an observer-only breakout; it verifies that observer-only rooms are omitted from Start and all API legs remain in their breakout rooms.
 
 ## Deterministic workflow evidence
 

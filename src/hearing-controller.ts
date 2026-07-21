@@ -46,22 +46,17 @@ export class HearingController {
   ): Promise<StartedHearing> {
     this.assertAvailable();
 
-    const roomMoves = rooms
-      .map((room) => ({
-        room,
-        participantIds: uniqueParticipantIds(room.participantIds),
-      }))
-      .filter(({ participantIds }) => participantIds.length > 0);
+    const roomMoves = rooms.filter((room) => room.participantIds.length > 0);
     if (roomMoves.length === 0) throw new EmptyRoomError();
 
     this.busy = true;
     try {
       const results = await Promise.allSettled(
-        roomMoves.map(({ room, participantIds }) =>
+        roomMoves.map((room) =>
           this.options.moveParticipants({
             fromBreakoutUuid: room.id,
             toRoomUuid: "main",
-            participants: [...participantIds],
+            participants: [],
           }),
         ),
       );
@@ -71,7 +66,7 @@ export class HearingController {
       );
       if (failedMove) throw failedMove.reason;
       return {
-        roomName: roomMoves.map(({ room }) => room.name).join(", "),
+        roomName: roomMoves.map(({ name }) => name).join(", "),
         participantCount: roomMoves.reduce(
           (count, { participantIds }) => count + participantIds.length,
           0,
@@ -99,8 +94,4 @@ export class HearingController {
   private assertAvailable(): void {
     if (this.busy) throw new HearingActionInProgressError();
   }
-}
-
-function uniqueParticipantIds<T>(ids: readonly T[]): T[] {
-  return [...new Set(ids)];
 }

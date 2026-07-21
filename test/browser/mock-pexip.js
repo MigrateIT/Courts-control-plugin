@@ -6,10 +6,13 @@ const toastRoot = document.querySelector("#toast-root");
 const participants = {
   clerk: participant("clerk-chair", "Court clerk", true),
   court: participant("court-chair", "Presiding judge", true),
+  observerA: apiParticipant("mmm-observer-a", "MMM observer A"),
   alice: participant("case-a-alice", "A. de Vries"),
   counsel: participant("case-a-counsel", "Counsel Jansen"),
+  observerB: apiParticipant("mmm-observer-b", "MMM observer B"),
   bob: participant("case-b-bob", "B. Smit"),
   interpreter: participant("case-b-interpreter", "Interpreter Bakker"),
+  observerOnly: apiParticipant("mmm-observer-only", "MMM observer only"),
 };
 
 const rooms = new Map([
@@ -24,14 +27,29 @@ const rooms = new Map([
     "breakout-case-a",
     {
       name: "Case 2026-0412",
-      participants: [participants.alice, participants.counsel],
+      participants: [
+        participants.observerA,
+        participants.alice,
+        participants.counsel,
+      ],
     },
   ],
   [
     "breakout-case-b",
     {
       name: "Case 2026-0413",
-      participants: [participants.bob, participants.interpreter],
+      participants: [
+        participants.observerB,
+        participants.bob,
+        participants.interpreter,
+      ],
+    },
+  ],
+  [
+    "breakout-observer-only",
+    {
+      name: "Observer only",
+      participants: [participants.observerOnly],
     },
   ],
 ]);
@@ -39,6 +57,7 @@ const rooms = new Map([
 let channelId;
 const buttons = new Map();
 const previousRooms = new Map();
+let activityLocations = new Map();
 const moveRequests = [];
 let nextButtonId = 1;
 let moveDelay = 1200;
@@ -141,7 +160,7 @@ function sendInitialEvents() {
   for (const [id, room] of [...rooms].filter(([id]) => id !== "main")) {
     emit("event:breakoutBegin", {
       breakout_uuid: id,
-      participant_uuid: room.participants[0]?.uuid,
+      participant_uuid: `${id}-control`,
     });
     emit("event:conferenceStatus", {
       id,
@@ -153,7 +172,8 @@ function sendInitialEvents() {
       },
     });
   }
-  emitAllRosters();
+  emitParticipantSnapshots();
+  activityLocations = currentParticipantLocations();
 }
 
 function moveParticipants({
@@ -165,10 +185,17 @@ function moveParticipants({
   if (!source) return;
   const selectedIds = ids.length
     ? new Set(ids)
-    : new Set(source.participants.map(({ uuid }) => uuid));
-  const moved = source.participants.filter(({ uuid }) => selectedIds.has(uuid));
+    : new Set(
+        source.participants
+          .filter((person) => !person.controlOnly)
+          .map(({ uuid }) => uuid),
+      );
+  const moved = source.participants.filter(
+    ({ controlOnly, uuid }) => !controlOnly && selectedIds.has(uuid),
+  );
+  const movedIds = new Set(moved.map(({ uuid }) => uuid));
   source.participants = source.participants.filter(
-    ({ uuid }) => !selectedIds.has(uuid),
+    ({ uuid }) => !movedIds.has(uuid),
   );
   for (const person of moved) {
     const destinationId =
@@ -179,18 +206,56 @@ function moveParticipants({
       continue;
     }
     previousRooms.set(person.uuid, fromBreakoutUuid);
+    person.isWaiting = false;
+    person.serviceType = "conference";
+    person.protocol = "WebRTC";
     if (!destination.participants.some(({ uuid }) => uuid === person.uuid)) {
       destination.participants.push(person);
     }
   }
   renderRooms();
-  emitAllRosters();
+  emitAllParticipantActivities();
 }
 
-function emitAllRosters() {
+function emitAllParticipantActivities() {
+  const current = currentParticipantLocations();
+  const activities = [];
+
+  for (const [participantId, previous] of activityLocations) {
+    const next = current.get(participantId);
+    if (!next || next.roomId !== previous.roomId) {
+      activities.push({
+        roomId: previous.roomId,
+        activity: { type: 1, participant: previous.person },
+      });
+    }
+  }
+  for (const [participantId, next] of current) {
+    const previous = activityLocations.get(participantId);
+    if (!previous || previous.roomId !== next.roomId) {
+      activities.push({
+        roomId: next.roomId,
+        activity: { type: 0, participant: next.person },
+      });
+    }
+  }
+
+  activityLocations = current;
+  if (activities.length > 0) emit("event:participantsActivities", activities);
+}
+
+function emitParticipantSnapshots() {
   for (const [id, room] of rooms) {
     emit("event:participants", { id, participants: room.participants });
   }
+}
+
+function currentParticipantLocations() {
+  return new Map(
+    [...rooms].flatMap(([roomId, room]) =>
+      room.participants.map((person) => [person.uuid, { roomId, person }]),
+    ),
+  );
 }
 
 function renderButtons() {
@@ -269,16 +334,19 @@ function renderRooms() {
   const roomElements = [...rooms]
     .filter(([id]) => id !== "main")
     .map(([id, room]) => {
+      const waitingParticipants = room.participants.filter(
+        ({ controlOnly }) => !controlOnly,
+      );
       const card = document.createElement("article");
       card.className = "room-card";
       card.dataset.roomId = id;
       card.innerHTML = `
         <h3>${escapeHtml(room.name)}</h3>
-        <p>${room.participants.length} participant(s) waiting</p>
+        <p>${waitingParticipants.length} participant(s) waiting</p>
         <div class="room-people">
           ${
-            room.participants.length
-              ? room.participants
+            waitingParticipants.length
+              ? waitingParticipants
                   .map(
                     ({ displayName }) =>
                       `<span class="person-chip">${escapeHtml(displayName)}</span>`,
@@ -300,7 +368,26 @@ function participantCard(person) {
 }
 
 function participant(uuid, displayName, isHost = false) {
-  return { uuid, displayName, isHost };
+  return {
+    uuid,
+    displayName,
+    isHost,
+    protocol: isHost ? "WebRTC" : "api",
+    isWaiting: !isHost,
+    serviceType: isHost ? "conference" : "waiting_room",
+  };
+}
+
+function apiParticipant(uuid, displayName) {
+  return {
+    uuid,
+    displayName,
+    isHost: true,
+    protocol: "api",
+    isWaiting: false,
+    serviceType: "conference",
+    controlOnly: true,
+  };
 }
 
 function emit(event, payload) {

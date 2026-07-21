@@ -24,12 +24,8 @@ export class RoomDirectory {
     ParticipantSummary
   >();
 
-  recordBreakout(roomId: BreakoutRoomId, participantId?: ParticipantID): void {
-    const room = this.ensureRoom(roomId);
-    if (participantId !== undefined && !room.participants.has(participantId)) {
-      this.removeParticipantFromAllRooms(participantId);
-      room.participants.set(participantId, participantSummary(participantId));
-    }
+  recordBreakout(roomId: BreakoutRoomId): void {
+    this.ensureRoom(roomId);
   }
 
   removeBreakout(roomId: BreakoutRoomId): void {
@@ -61,18 +57,10 @@ export class RoomDirectory {
     }
   }
 
-  recordParticipant(roomId: RoomID, participant: InfinityParticipant): void {
-    this.moveParticipantToRoom(roomId, participant);
-  }
-
-  removeParticipant(participantId: ParticipantID): void {
-    this.removeParticipantFromAllRooms(participantId);
-  }
-
   applyActivities(activities: readonly RoomParticipantActivity[]): void {
     for (const { roomId, activity } of activities) {
       if (activity.type === participantLeaveActivity) {
-        this.removeParticipant(activity.participant.uuid);
+        this.removeParticipantFromRoom(roomId, activity.participant.uuid);
       } else {
         this.moveParticipantToRoom(roomId, activity.participant);
       }
@@ -112,7 +100,7 @@ export class RoomDirectory {
     participant: InfinityParticipant,
   ): void {
     this.removeParticipantFromAllRooms(participant.uuid);
-    const summary = participantSummary(participant.uuid, participant);
+    const summary = participantSummary(participant);
     if (roomId === "main") {
       this.mainParticipants.set(participant.uuid, summary);
     } else {
@@ -125,17 +113,29 @@ export class RoomDirectory {
     for (const room of this.rooms.values())
       room.participants.delete(participantId);
   }
+
+  private removeParticipantFromRoom(
+    roomId: RoomID,
+    participantId: ParticipantID,
+  ): void {
+    if (roomId === "main") {
+      this.mainParticipants.delete(participantId);
+    } else {
+      this.rooms.get(roomId)?.participants.delete(participantId);
+    }
+  }
 }
 
 function participantSummary(
-  uuid: ParticipantID,
-  participant?: InfinityParticipant,
+  participant: InfinityParticipant,
 ): ParticipantSummary {
+  const isWaiting =
+    participant.isWaiting ||
+    participant.serviceType === "waiting_room" ||
+    participant.rawData?.service_type === "waiting_room";
   return {
-    uuid,
-    isControlOnly:
-      participant === undefined ||
-      participant.protocol?.toLowerCase() === "api",
+    uuid: participant.uuid,
+    isControlOnly: participant.protocol?.toLowerCase() === "api" && !isWaiting,
   };
 }
 

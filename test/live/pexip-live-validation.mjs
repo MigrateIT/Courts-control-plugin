@@ -265,6 +265,10 @@ try {
     fullPage: true,
   });
   const mainBeforeStart = rosterTracker.getMovable("main");
+  const selectedRoomApiParticipants = rosterTracker.getApi(breakoutIds[0]);
+  if (selectedRoomApiParticipants.size === 0) {
+    throw new Error("Selected breakout has no API observer leg to validate");
+  }
   await page
     .getByRole("button", { name: "Start hearing", exact: true })
     .click();
@@ -272,13 +276,16 @@ try {
   await waitForPluginMove(page, {
     fromBreakoutUuid: breakoutIds[0],
     toRoomUuid: "main",
-    participants: caseAIds,
+    participants: [],
   });
   await waitForTransferredParticipants(rosterTracker, {
     previousIds: caseAIds,
     destinationRoomId: "main",
     destinationBefore: mainBeforeStart,
-    unchanged: { [breakoutIds[1]]: caseBIds },
+    unchanged: {
+      [breakoutIds[0]]: [...selectedRoomApiParticipants],
+      [breakoutIds[1]]: caseBIds,
+    },
   });
   liveStage = "capturing active hearing";
   await revealMeetingControls(page);
@@ -313,6 +320,7 @@ try {
     hearingHash: hash(target.hearing.id),
     breakoutHashes: breakoutIds.map(hash),
     selectedBreakoutParticipantCount: 2,
+    retainedApiObserverCount: selectedRoomApiParticipants.size,
     waitingBreakoutParticipantCount: 2,
     nativePreviousReturnValidated: true,
     returnDestinationReconnectObserved: false,
@@ -561,6 +569,8 @@ async function startRosterTracker(conference, token) {
   const pending = new Map();
   const displayNames = new Map();
   const protocols = new Map();
+  const serviceTypes = new Map();
+  const waitingStates = new Map();
   let failure;
   const response = await fetch(
     `${conference.host}/api/client/v2/conferences/${encodeURIComponent(conference.alias)}/events?token=${encodeURIComponent(token)}`,
@@ -589,6 +599,8 @@ async function startRosterTracker(conference, token) {
           pending,
           displayNames,
           protocols,
+          serviceTypes,
+          waitingStates,
           data.breakout_uuid,
           data.event,
           data.data,
@@ -600,6 +612,8 @@ async function startRosterTracker(conference, token) {
         pending,
         displayNames,
         protocols,
+        serviceTypes,
+        waitingStates,
         "main",
         event,
         data,
@@ -616,9 +630,27 @@ async function startRosterTracker(conference, token) {
     getMovable(roomId) {
       if (failure) throw failure;
       return new Set(
+        [...(rooms.get(roomId) ?? [])].filter((participantId) =>
+          isMovableParticipant(
+            participantId,
+            protocols,
+            serviceTypes,
+            waitingStates,
+          ),
+        ),
+      );
+    },
+    getApi(roomId) {
+      if (failure) throw failure;
+      return new Set(
         [...(rooms.get(roomId) ?? [])].filter(
           (participantId) =>
-            protocols.get(participantId)?.toLowerCase() !== "api",
+            !isMovableParticipant(
+              participantId,
+              protocols,
+              serviceTypes,
+              waitingStates,
+            ),
         ),
       );
     },
@@ -633,7 +665,12 @@ async function startRosterTracker(conference, token) {
       return [...(rooms.get(roomId) ?? [])].find(
         (participantId) =>
           !previousMembership.has(participantId) &&
-          protocols.get(participantId)?.toLowerCase() !== "api",
+          isMovableParticipant(
+            participantId,
+            protocols,
+            serviceTypes,
+            waitingStates,
+          ),
       );
     },
     locations(participantId) {
@@ -684,6 +721,8 @@ function applyRosterEvent(
   pending,
   displayNames,
   protocols,
+  serviceTypes,
+  waitingStates,
   roomId,
   event,
   participant,
@@ -708,6 +747,16 @@ function applyRosterEvent(
     if (typeof participant.protocol === "string") {
       protocols.set(participant.uuid, participant.protocol);
     }
+    const serviceType = participant.service_type ?? participant.serviceType;
+    if (typeof serviceType === "string") {
+      serviceTypes.set(participant.uuid, serviceType);
+    }
+    const isWaiting = participant.is_waiting ?? participant.isWaiting;
+    if (typeof isWaiting === "boolean") {
+      waitingStates.set(participant.uuid, isWaiting);
+    } else if (serviceType === "waiting_room") {
+      waitingStates.set(participant.uuid, true);
+    }
     for (const [candidateRoomId, members] of rooms) {
       if (candidateRoomId !== roomId) members.delete(participant.uuid);
     }
@@ -725,6 +774,19 @@ function applyRosterEvent(
   ) {
     (pending.get(roomId) ?? rooms.get(roomId))?.delete(participant.uuid);
   }
+}
+
+function isMovableParticipant(
+  participantId,
+  protocols,
+  serviceTypes,
+  waitingStates,
+) {
+  return (
+    protocols.get(participantId)?.toLowerCase() !== "api" ||
+    waitingStates.get(participantId) === true ||
+    serviceTypes.get(participantId) === "waiting_room"
+  );
 }
 
 async function waitForMembership(tracker, expected) {
@@ -886,16 +948,35 @@ async function waitForPluginRoster(page, expected) {
           const latest = new Map();
           for (const entry of window.__courtPluginMessages ?? []) {
             if (entry.event === "event:participants") {
-              latest.set(entry.payload?.id, entry.payload?.participants ?? []);
+              latest.set(
+                entry.payload.id,
+                new Map(
+                  (entry.payload.participants ?? []).map((participant) => [
+                    participant.uuid,
+                    participant,
+                  ]),
+                ),
+              );
+              continue;
+            }
+            if (entry.event !== "event:participantsActivities") continue;
+            for (const { roomId, activity } of entry.payload ?? []) {
+              if (activity.type === 1) {
+                latest.get(roomId)?.delete(activity.participant.uuid);
+                continue;
+              }
+              for (const participants of latest.values()) {
+                participants.delete(activity.participant.uuid);
+              }
+              const participants = latest.get(roomId) ?? new Map();
+              participants.set(activity.participant.uuid, activity.participant);
+              latest.set(roomId, participants);
             }
           }
           const counts = {};
           let matches = true;
           for (const [roomId, ids] of Object.entries(wanted)) {
-            const participants = latest.get(roomId) ?? [];
-            const participantIds = new Set(
-              participants.map((participant) => participant.uuid),
-            );
+            const participantIds = new Set(latest.get(roomId)?.keys() ?? []);
             counts[roomId] = participantIds.size;
             if (!ids.every((id) => participantIds.has(id))) matches = false;
           }

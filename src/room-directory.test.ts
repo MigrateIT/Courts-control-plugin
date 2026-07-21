@@ -10,80 +10,52 @@ import { RoomDirectory } from "./room-directory";
 
 const roomA = "breakout-a" as Exclude<RoomID, "main">;
 const roomB = "breakout-b" as Exclude<RoomID, "main">;
-const personA = participant("person-a", "Person A");
-const personB = participant("person-b", "Person B", true);
+const waitingPerson = participant(
+  "waiting-person",
+  "Waiting Person",
+  "api",
+  true,
+);
+const observer = participant("mmm-observer", "MMM observer", "api", false);
 
 describe("RoomDirectory", () => {
-  it("builds named breakout rosters from status and participant snapshots", () => {
+  it("lists a breakout as soon as Pexip announces it", () => {
+    const directory = new RoomDirectory();
+    directory.recordBreakout(roomA);
+
+    const [room] = directory.listBreakouts();
+    expect(room?.id).toBe(roomA);
+    expect(room?.name).toMatch(/^Waiting room /);
+    expect(room?.participantIds).toEqual([]);
+  });
+
+  it("counts an unadmitted api participant from the room snapshot", () => {
     const directory = new RoomDirectory();
     directory.recordConferenceStatus(roomA, status("Case A"));
-    directory.replaceParticipants(roomA, [personA, personB]);
+    directory.replaceParticipants(roomA, [observer, waitingPerson]);
 
-    expect(directory.listBreakouts()).toEqual([
-      {
-        id: roomA,
-        name: "Case A",
-        participantIds: [personA.uuid, personB.uuid],
-      },
-    ]);
+    expect(directory.getBreakout(roomA)).toEqual({
+      id: roomA,
+      name: "Case A",
+      participantIds: [waitingPerson.uuid],
+    });
   });
 
-  it("moves a participant between rooms instead of duplicating it", () => {
+  it("keeps an api observer out of the movable participant count", () => {
     const directory = new RoomDirectory();
-    directory.replaceParticipants(roomA, [personA]);
-    directory.recordParticipant(roomB, personA);
+    directory.replaceParticipants(roomA, [observer]);
 
     expect(directory.getBreakout(roomA)?.participantIds).toEqual([]);
-    expect(directory.getBreakout(roomB)?.participantIds).toEqual([
-      personA.uuid,
-    ]);
-    directory.recordParticipant("main", personA);
-    expect(directory.getBreakout(roomB)?.participantIds).toEqual([]);
   });
 
-  it("applies modern join, update, and leave activities", () => {
+  it("tracks later room moves through participant activities", () => {
     const directory = new RoomDirectory();
+    directory.replaceParticipants(roomA, [observer, waitingPerson]);
     directory.applyActivities([
-      {
-        roomId: roomA,
-        activity: { type: 0 as ParticipantActivities, participant: personA },
-      },
-      {
-        roomId: roomB,
-        activity: { type: 2 as ParticipantActivities, participant: personB },
-      },
-    ]);
-    directory.applyActivities([
-      {
-        roomId: roomA,
-        activity: { type: 1 as ParticipantActivities, participant: personA },
-      },
+      leave(roomA, waitingPerson),
+      join("main", waitingPerson),
     ]);
 
-    expect(directory.getBreakout(roomA)?.participantIds).toEqual([]);
-    expect(directory.getBreakout(roomB)?.participantIds).toEqual([
-      personB.uuid,
-    ]);
-  });
-
-  it("uses breakout begin as early roster evidence and removes ended rooms", () => {
-    const directory = new RoomDirectory();
-    directory.recordBreakout(roomA, personA.uuid);
-    directory.recordBreakout(roomA, personA.uuid);
-    expect(directory.getBreakout(roomA)?.participantIds).toEqual([]);
-    expect(directory.getBreakout(roomA)?.name).toMatch(/^Waiting room /);
-    directory.removeBreakout(roomA);
-    expect(directory.getBreakout(roomA)).toBeUndefined();
-  });
-
-  it("removes participants absent from a replacement snapshot", () => {
-    const directory = new RoomDirectory();
-    directory.replaceParticipants(roomA, [personA, personB]);
-    directory.replaceParticipants(roomA, [personB]);
-    expect(directory.getBreakout(roomA)?.participantIds).toEqual([
-      personB.uuid,
-    ]);
-    directory.removeParticipant(personB.uuid);
     expect(directory.getBreakout(roomA)?.participantIds).toEqual([]);
   });
 
@@ -92,39 +64,51 @@ describe("RoomDirectory", () => {
     directory.recordConferenceStatus(roomA, status("Zulu"));
     directory.recordConferenceStatus(roomB, status("Alpha"));
     directory.recordConferenceStatus("main", status("Ignored"));
+
     expect(directory.listBreakouts().map(({ name }) => name)).toEqual([
       "Alpha",
       "Zulu",
     ]);
   });
 
-  it("excludes Pexip API control legs from case participant moves", () => {
+  it("removes a room when Pexip announces breakout end", () => {
     const directory = new RoomDirectory();
-    const controlLeg = {
-      ...participant("control-leg", "Breakout control", true),
-      protocol: "api",
-    } as InfinityParticipant;
-    directory.replaceParticipants(roomA, [controlLeg, personA]);
+    directory.recordBreakout(roomA);
+    directory.removeBreakout(roomA);
 
-    expect(directory.getBreakout(roomA)?.participantIds).toEqual([
-      personA.uuid,
-    ]);
+    expect(directory.getBreakout(roomA)).toBeUndefined();
   });
 });
 
 function participant(
   id: string,
   displayName: string,
-  isHost = false,
+  protocol: "WebRTC" | "api",
+  isWaiting: boolean,
 ): InfinityParticipant {
   return {
     uuid: id as ParticipantID,
     displayName,
-    isHost,
-    protocol: "WebRTC",
+    protocol,
+    isWaiting,
+    serviceType: isWaiting ? "waiting_room" : "conference",
   } as unknown as InfinityParticipant;
 }
 
 function status(breakoutName?: string): ConferenceStatus {
   return { breakoutName } as ConferenceStatus;
+}
+
+function join(roomId: RoomID, person: InfinityParticipant) {
+  return {
+    roomId,
+    activity: { type: 0 as ParticipantActivities, participant: person },
+  };
+}
+
+function leave(roomId: RoomID, person: InfinityParticipant) {
+  return {
+    roomId,
+    activity: { type: 1 as ParticipantActivities, participant: person },
+  };
 }

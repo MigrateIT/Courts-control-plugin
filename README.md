@@ -2,7 +2,7 @@
 
 Production-oriented Pexip toolbar plugin for moving cases between breakout waiting rooms and the main hearing.
 
-The chair chooses one non-empty breakout room or all waiting rooms at once. The plugin snapshots the selected room rosters, admits exactly those UUIDs to `main`, and leaves unselected waiting rooms untouched. Pause asks Pexip to return participants to their server-recorded previous rooms.
+The chair chooses one non-empty breakout room or all waiting rooms at once. Room snapshots provide participant counts and hide observer-only rooms, while Pexip performs a native room-scoped move-all so admission does not depend on a potentially stale UUID list. Pause asks Pexip to return participants to their server-recorded previous rooms.
 
 ## Production artifact
 
@@ -39,8 +39,8 @@ This is not a single button that changes mode. Keeping both controls visible mak
 ## Safety behavior
 
 - The room selector includes non-empty breakout rooms and a final **Admit all waiting rooms at once** option.
-- Pexip `api` control legs are excluded from participant moves.
-- Start uses `fromBreakoutUuid`, `toRoomUuid: "main"`, and an explicit participant UUID array.
+- Non-waiting Pexip `api` participants, such as MMM observer legs, are excluded from participant counts; observer-only rooms are not offered for Start. Unadmitted `api` participants whose state is `waiting_room` remain included and can be started.
+- Start uses `fromBreakoutUuid`, `toRoomUuid: "main"`, and an empty participant array. Pexip interprets this as moving all eligible participants from that room and retains non-movable `api` legs.
 - Starting shows a non-dismissible 10-second countdown that closes automatically.
 - Admit-all sends one room-scoped move per non-empty waiting room at the same time.
 - Pause uses Pexip's standard `toRoomUuid: "previous"` destination with an empty participant list, allowing Pexip to return all eligible main-room participants to their server-recorded previous rooms.
@@ -48,14 +48,14 @@ This is not a single button that changes mode. Keeping both controls visible mak
 - Actions are serialized within each plugin instance; repeated local clicks cannot overlap moves.
 - An explicit Pexip rejection leaves both independent controls available for a safe retry.
 - Both the documented no-body success response and the newer `{ status: 200 }` response are supported.
-- Legacy roster events and newer `participantsActivities` events are both consumed.
+- Participant roster changes use the v38+ `participantsActivities` event. A room-scoped `participants` snapshot is retained only to seed participants who were already waiting when the plugin subscribed. The deprecated joined/left events are not used.
 
 ## Chair workflow
 
 1. Confirm that the separate play and pause controls are visible in the chair toolbar.
 2. Click the play button, labelled **Start a case hearing**.
 3. Choose one waiting room or the final **Admit all waiting rooms at once** option; current participant counts are shown.
-4. Click **Start hearing**. Only the selected participant snapshot is admitted.
+4. Click **Start hearing**. Pexip admits all eligible participants from the selected room while leaving `api` observer legs in place.
 5. Any chair can use the separate pause button, labelled **Pause hearing and return participants to previous rooms**. Pexip performs the return using its own previous-room assignments.
 6. Repeat for the next waiting room.
 
