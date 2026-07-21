@@ -214,10 +214,10 @@ function moveParticipants({
     }
   }
   renderRooms();
-  emitAllParticipantActivities();
+  emitAllParticipantActivities(toRoomUuid !== "main");
 }
 
-function emitAllParticipantActivities() {
+function emitAllParticipantActivities(emitChanges = true) {
   const current = currentParticipantLocations();
   const activities = [];
 
@@ -241,7 +241,9 @@ function emitAllParticipantActivities() {
   }
 
   activityLocations = current;
-  if (activities.length > 0) emit("event:participantsActivities", activities);
+  if (emitChanges && activities.length > 0) {
+    emit("event:participantsActivities", activities);
+  }
 }
 
 function emitParticipantSnapshots() {

@@ -41,6 +41,7 @@ This is not a single button that changes mode. Keeping both controls visible mak
 - The room selector includes non-empty breakout rooms and a final **Admit all waiting rooms at once** option.
 - Non-waiting Pexip `api` participants, such as MMM observer legs, are excluded from participant counts; observer-only rooms are not offered for Start. Unadmitted `api` participants whose state is `waiting_room` remain included and can be started.
 - Start uses `fromBreakoutUuid`, `toRoomUuid: "main"`, and an empty participant array. Pexip interprets this as moving all eligible participants from that room and retains non-movable `api` legs.
+- After Pexip accepts Start, the local room count removes the exact participants selected at initiation even if Webapp3 omits the corresponding move activity. Later roster events can still correct the state, and participants who arrived during the countdown are retained.
 - Starting shows a non-dismissible 10-second countdown that closes automatically.
 - Admit-all sends one room-scoped move per non-empty waiting room at the same time.
 - Pause uses Pexip's standard `toRoomUuid: "previous"` destination with an empty participant list, allowing Pexip to return all eligible main-room participants to their server-recorded previous rooms.

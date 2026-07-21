@@ -59,6 +59,27 @@ describe("RoomDirectory", () => {
     expect(directory.getBreakout(roomA)?.participantIds).toEqual([]);
   });
 
+  it("reconciles a successful start when no move activity arrives", () => {
+    const directory = new RoomDirectory();
+    const lateArrival = participant(
+      "late-arrival",
+      "Late Arrival",
+      "api",
+      true,
+    );
+    directory.replaceParticipants(roomA, [
+      observer,
+      waitingPerson,
+      lateArrival,
+    ]);
+
+    directory.recordParticipantsMovedToMain(roomA, [waitingPerson.uuid]);
+
+    expect(directory.getBreakout(roomA)?.participantIds).toEqual([
+      lateArrival.uuid,
+    ]);
+  });
+
   it("sorts rooms by display name and ignores main status naming", () => {
     const directory = new RoomDirectory();
     directory.recordConferenceStatus(roomA, status("Zulu"));

@@ -71,6 +71,23 @@ try {
   await page.getByTestId("toast").waitFor();
   await screenshot(page, "04-case-a-active-success.png");
 
+  await startControl.click();
+  await page.getByTestId("room-form").waitFor();
+  const optionsAfterStart = await page
+    .getByTestId("room-select")
+    .locator("option")
+    .allTextContents();
+  if (
+    optionsAfterStart.length !== 2 ||
+    optionsAfterStart[0] !== "Case 2026-0413 (2)" ||
+    optionsAfterStart[1] !== "Admit all waiting rooms at once"
+  ) {
+    throw new Error(
+      `Moved participants remained in the room count: ${JSON.stringify(optionsAfterStart)}`,
+    );
+  }
+  await page.getByTestId("form-close").click();
+
   await returnControl.click();
   await expectTitle(page, "hearing-return", "Updating the hearing");
   await screenshot(page, "05-pausing-case-a-guarded.png");

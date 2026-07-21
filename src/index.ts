@@ -180,6 +180,10 @@ async function startRooms(
       ? controller.startAll(rooms)
       : controller.start(rooms[0]!);
     const started = await withCountdown(start);
+    for (const room of rooms) {
+      directory.recordParticipantsMovedToMain(room.id, room.participantIds);
+    }
+    scheduleReconcile();
     await showToast(allRooms ? "hearingStartedAll" : "hearingStarted", false, {
       count: started.participantCount,
       room: started.roomName,

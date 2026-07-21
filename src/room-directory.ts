@@ -67,6 +67,21 @@ export class RoomDirectory {
     }
   }
 
+  recordParticipantsMovedToMain(
+    roomId: BreakoutRoomId,
+    participantIds: readonly ParticipantID[],
+  ): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+
+    for (const participantId of participantIds) {
+      const participant = room.participants.get(participantId);
+      if (!participant || participant.isControlOnly) continue;
+      room.participants.delete(participantId);
+      this.mainParticipants.set(participantId, participant);
+    }
+  }
+
   listBreakouts(): readonly RoomSummary[] {
     return [...this.rooms.values()]
       .map((room) => ({
