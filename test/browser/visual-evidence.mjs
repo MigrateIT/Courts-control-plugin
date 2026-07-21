@@ -28,12 +28,40 @@ try {
 
   await startControl.click();
   await page.getByTestId("room-form").waitFor();
+  const options = await page
+    .getByTestId("room-select")
+    .locator("option")
+    .allTextContents();
+  if (options.at(-1) !== "Admit all waiting rooms at once") {
+    throw new Error(`Unexpected final room option: ${JSON.stringify(options)}`);
+  }
+  await page.getByTestId("form-close").click();
+  await page.waitForTimeout(100);
+  if (await page.getByTestId("toast").isVisible()) {
+    throw new Error("Closing the room selector unexpectedly showed a toast");
+  }
+
+  await startControl.click();
+  await page.getByTestId("room-form").waitFor();
   await screenshot(page, "02-room-selection-case-a.png");
 
-  await page.getByTestId("room-form").getByRole("button").click();
+  await page
+    .getByTestId("room-form")
+    .getByRole("button", { name: "Start hearing" })
+    .click();
   await expectTitle(page, "hearing-start", "Updating the hearing");
+  await page.waitForTimeout(2000);
+  if (!(await returnControl.isDisabled())) {
+    throw new Error("Pause was enabled before the start countdown completed");
+  }
+  await expectTitle(page, "hearing-return", "Updating the hearing");
   await screenshot(page, "03-starting-case-a-guarded.png");
   await expectTitle(page, "hearing-start", "Start a case hearing");
+  if (await returnControl.isDisabled()) {
+    throw new Error(
+      "Pause remained disabled after the start countdown completed",
+    );
+  }
   await page.getByTestId("toast").waitFor();
   await screenshot(page, "04-case-a-active-success.png");
 
@@ -47,7 +75,10 @@ try {
   await startControl.click();
   await page.getByTestId("room-select").selectOption("breakout-case-b");
   await screenshot(page, "07-room-selection-case-b.png");
-  await page.getByTestId("room-form").getByRole("button").click();
+  await page
+    .getByTestId("room-form")
+    .getByRole("button", { name: "Start hearing" })
+    .click();
   await expectTitle(page, "hearing-start", "Updating the hearing");
   await expectTitle(page, "hearing-start", "Start a case hearing");
   await page.getByTestId("toast").waitFor();

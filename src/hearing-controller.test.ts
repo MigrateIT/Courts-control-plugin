@@ -108,4 +108,27 @@ describe("HearingController", () => {
     await controller.start(room(["other" as ParticipantID]));
     expect(moveParticipants).toHaveBeenCalledTimes(2);
   });
+
+  it("starts all non-empty rooms together", async () => {
+    const moveParticipants = vi.fn().mockResolvedValue(undefined);
+    const controller = new HearingController({ moveParticipants });
+    const secondRoomId = "room-case-b" as Exclude<RoomID, "main">;
+
+    await expect(
+      controller.startAll([
+        room([participantOne]),
+        { id: roomId, name: "Empty", participantIds: [] },
+        { id: secondRoomId, name: "Case B", participantIds: [participantTwo] },
+      ]),
+    ).resolves.toEqual({
+      roomName: "Case A, Case B",
+      participantCount: 2,
+    });
+    expect(moveParticipants).toHaveBeenCalledTimes(2);
+    expect(moveParticipants).toHaveBeenNthCalledWith(2, {
+      fromBreakoutUuid: secondRoomId,
+      toRoomUuid: "main",
+      participants: [participantTwo],
+    });
+  });
 });

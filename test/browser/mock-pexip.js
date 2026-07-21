@@ -230,9 +230,16 @@ function renderForm(id, payload) {
         </select>
       </label>
       <div class="modal-actions">
+        <button type="button" data-testid="form-close">Close</button>
         <button type="submit">${escapeHtml(payload.form.submitBtnTitle)}</button>
       </div>
     </form>`;
+  backdrop
+    .querySelector('[data-testid="form-close"]')
+    .addEventListener("click", () => {
+      emit("ui:form:input", { modalId: id, input: { room: "" } });
+      backdrop.remove();
+    });
   backdrop.querySelector("form").addEventListener("submit", (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -248,7 +255,7 @@ function renderToast(payload) {
   toast.dataset.testid = "toast";
   toast.textContent = payload.message;
   toastRoot.replaceChildren(toast);
-  window.setTimeout(() => toast.remove(), 6500);
+  window.setTimeout(() => toast.remove(), payload.timeout ?? 6500);
 }
 
 function renderRooms() {

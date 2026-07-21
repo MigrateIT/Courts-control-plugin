@@ -14,5 +14,12 @@ describe("i18n", () => {
       translate("en", "hearingStarted", { count: 2, room: "Case A" }),
     ).toBe("2 participant(s) admitted from Case A.");
     expect(translate("nl", "toolbarReturn")).toContain("vorige ruimte");
+    expect(translate("nl", "selectAll")).toBe(
+      "Alle wachtruimten tegelijk toelaten",
+    );
+    expect(translate("nl", "selectTitle")).toBe("Online zitting starten");
+    expect(translate("en", "hearingCountdown", { seconds: 10 })).toBe(
+      "Hearing starts in 10 second(s)…",
+    );
   });
 });

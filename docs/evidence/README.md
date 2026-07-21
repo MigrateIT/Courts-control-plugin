@@ -2,11 +2,13 @@
 
 All images are 1440×1000 PNG captures. Files 01–09 use the current production bundle in a deterministic Pexip RPC browser simulator. Files 10–13 are historical captures from plugin version 3 in the authorized non-production Pexip Webapp3 environment.
 
+The intended current design uses two simultaneously visible chair-toolbar controls: a play button for Start and a pause button for the native previous-room return. The controls do not replace or toggle each other. Both are disabled while a move is in progress, including the complete 10-second Start hold.
+
 ## Deterministic workflow evidence
 
 | Stage                                                | Evidence                                                                                   |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Two independent cases waiting                        | [01-idle-two-cases-waiting.png](01-idle-two-cases-waiting.png)                             |
+| Separate Start and Pause controls; two cases waiting | [01-idle-two-cases-waiting.png](01-idle-two-cases-waiting.png)                             |
 | Select Case A only                                   | [02-room-selection-case-a.png](02-room-selection-case-a.png)                               |
 | Start action locked while moving                     | [03-starting-case-a-guarded.png](03-starting-case-a-guarded.png)                           |
 | Case A active; Case B still waiting                  | [04-case-a-active-success.png](04-case-a-active-success.png)                               |

@@ -23,11 +23,12 @@
 1. Serve `dist/` from the final HTTPS production origin.
 2. Confirm the origin is allowed by Webapp3 and the plugin URL ends at `index.html` or its containing path.
 3. Open a low-impact conference with two disposable waiting rooms.
-4. Confirm only chair users see **Start a case hearing**.
-5. Start one disposable case and verify the second room count is unchanged.
-6. Pause it and verify the same people arrive back in the original room.
-7. Confirm another chair can use the independent Pause control without receiving state from the chair who started the hearing.
-8. Retain the prior plugin URL for immediate configuration rollback.
+4. Confirm only chair users see the two separate toolbar controls: play for **Start a case hearing** and pause for **Pause hearing and return participants to previous rooms**.
+5. Confirm both controls remain visible rather than replacing or toggling each other.
+6. Start one disposable case and verify both controls remain disabled for the complete 10-second Start hold and the second room count is unchanged.
+7. Pause it and verify the same people arrive back in the original room.
+8. Confirm another chair can use the independent Pause control without receiving state from the chair who started the hearing.
+9. Retain the prior plugin URL for immediate configuration rollback.
 
 ## Live-test caveat
 

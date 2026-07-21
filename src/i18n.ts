@@ -7,16 +7,20 @@ const translations = {
     toolbarBusy: "Updating the hearing…",
     selectTitle: "Start case hearing",
     selectDescription:
-      "Choose one waiting room. Only the participants currently in that room will be admitted to the main hearing.",
+      "Choose one waiting room or admit all waiting rooms at once. Only the participants currently waiting will be admitted to the main hearing.",
     selectRoom: "Waiting room",
+    selectAll: "Admit all waiting rooms at once",
     selectSubmit: "Start hearing",
     noWaitingRooms: "No waiting room with participants is available.",
     roomUnavailable: "That waiting room is no longer available. Choose again.",
     hearingStarted: "{count} participant(s) admitted from {room}.",
+    hearingStartedAll:
+      "{count} participant(s) admitted from all waiting rooms.",
+    hearingCountdown: "Hearing starts in {seconds} second(s)…",
     hearingPaused: "Participants were returned to their previous rooms.",
     actionBusy: "Please wait for the current hearing action to finish.",
     actionFailed:
-      "The hearing could not be updated. No broader room action was attempted.",
+      "The hearing could not be fully updated. Check the waiting rooms before trying again.",
     roomFallback: "Waiting room {suffix}",
   },
   nl: {
@@ -24,18 +28,21 @@ const translations = {
     toolbarReturn:
       "Pauzeer de zitting en zet deelnemers terug in hun vorige ruimte",
     toolbarBusy: "De zitting wordt bijgewerkt…",
-    selectTitle: "Zaakzitting starten",
+    selectTitle: "Online zitting starten",
     selectDescription:
-      "Kies één wachtruimte. Alleen de deelnemers die nu in die ruimte zitten, worden toegelaten tot de hoofdzitting.",
+      "Kies één wachtruimte of laat alle wachtruimten tegelijk toe. Alleen deelnemers die nu wachten, worden toegelaten tot de hoofdzitting.",
     selectRoom: "Wachtruimte",
+    selectAll: "Alle wachtruimten tegelijk toelaten",
     selectSubmit: "Zitting starten",
     noWaitingRooms: "Er is geen wachtruimte met deelnemers beschikbaar.",
     roomUnavailable: "Die wachtruimte is niet meer beschikbaar. Kies opnieuw.",
     hearingStarted: "{count} deelnemer(s) toegelaten uit {room}.",
+    hearingStartedAll: "{count} deelnemer(s) uit alle wachtruimten toegelaten.",
+    hearingCountdown: "De zitting start over {seconds} seconde(n)…",
     hearingPaused: "Deelnemers zijn teruggezet in hun vorige ruimte.",
     actionBusy: "Wacht tot de huidige zittingsactie is afgerond.",
     actionFailed:
-      "De zitting kon niet worden bijgewerkt. Er is geen bredere ruimteactie uitgevoerd.",
+      "De zitting kon niet volledig worden bijgewerkt. Controleer de wachtruimten voordat u het opnieuw probeert.",
     roomFallback: "Wachtruimte {suffix}",
   },
 } as const;

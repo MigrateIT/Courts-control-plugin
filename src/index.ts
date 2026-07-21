@@ -12,11 +12,14 @@ import type { MoveParticipantsRequest, RoomSummary } from "./types";
 
 const plugin = await registerPlugin({ id: PLUGIN_ID, version: PLUGIN_VERSION });
 const directory = new RoomDirectory();
+const allWaitingRoomsOption = "__all_waiting_rooms__";
+const countdownSeconds = 10;
 
 let locale: Locale = resolveLocale(navigator.language);
 let startLauncher: Button<"toolbar"> | null = null;
 let returnLauncher: Button<"toolbar"> | null = null;
 let meetingAvailable = false;
+let startHoldActive = false;
 let reconcileChain = Promise.resolve();
 
 const controller = new HearingController({
@@ -89,7 +92,7 @@ async function reconcileLauncher(): Promise<void> {
     return;
   }
 
-  const busy = controller.isBusy();
+  const busy = controller.isBusy() || startHoldActive;
   if (!startLauncher) {
     startLauncher = await plugin.ui.addButton(startLauncherPayload(busy));
     startLauncher.onClick.add(() => void selectAndStartHearing());
@@ -143,7 +146,13 @@ async function selectAndStartHearing(): Promise<void> {
         room: {
           name: translate(locale, "selectRoom"),
           type: "select" as const,
-          options: rooms.map(roomOption),
+          options: [
+            ...rooms.map(roomOption),
+            {
+              id: allWaitingRoomsOption,
+              label: translate(locale, "selectAll"),
+            },
+          ],
           selected: rooms[0]?.id,
         },
       },
@@ -151,27 +160,95 @@ async function selectAndStartHearing(): Promise<void> {
     },
   });
 
+  if (!input?.room) return;
+
+  if (input.room === allWaitingRoomsOption) {
+    const availableRooms = directory
+      .listBreakouts()
+      .filter((room) => room.participantIds.length > 0);
+    if (availableRooms.length === 0) {
+      await showToast("roomUnavailable", true);
+      return;
+    }
+    await startRooms(availableRooms, true);
+    return;
+  }
+
   const selected = directory.getBreakout(input.room);
   if (!selected || selected.participantIds.length === 0) {
     await showToast("roomUnavailable", true);
     return;
   }
 
+  await startRooms([selected], false);
+}
+
+async function startRooms(
+  rooms: readonly RoomSummary[],
+  allRooms: boolean,
+): Promise<void> {
+  startHoldActive = true;
   try {
     scheduleReconcile();
-    const started = await controller.start(selected);
-    await showToast("hearingStarted", false, {
+    const start = allRooms
+      ? controller.startAll(rooms)
+      : controller.start(rooms[0]!);
+    const started = await withCountdown(start);
+    await showToast(allRooms ? "hearingStartedAll" : "hearingStarted", false, {
       count: started.participantCount,
       room: started.roomName,
     });
   } catch (error) {
     await reportActionError(error);
   } finally {
+    startHoldActive = false;
     scheduleReconcile();
   }
 }
 
+async function withCountdown<T>(action: Promise<T>): Promise<T> {
+  let seconds = countdownSeconds;
+  showCountdownToast(seconds);
+  let timer: ReturnType<typeof globalThis.setInterval> | undefined;
+  const countdown = new Promise<void>((resolve) => {
+    timer = globalThis.setInterval(() => {
+      seconds -= 1;
+      if (seconds > 0) {
+        showCountdownToast(seconds);
+      } else {
+        globalThis.clearInterval(timer);
+        resolve();
+      }
+    }, 1000);
+  });
+
+  try {
+    const [result] = await Promise.all([action, countdown]);
+    return result;
+  } finally {
+    globalThis.clearInterval(timer);
+  }
+}
+
+function showCountdownToast(seconds: number): void {
+  void plugin.ui
+    .showToast({
+      message: translate(locale, "hearingCountdown", { seconds }),
+      isInterrupt: true,
+      canDismiss: false,
+      timeout: 1100,
+    })
+    .catch((error) => {
+      console.error("Court hearing countdown could not be shown", error);
+    });
+}
+
 async function pauseHearing(): Promise<void> {
+  if (startHoldActive) {
+    await showToast("actionBusy");
+    return;
+  }
+
   try {
     scheduleReconcile();
     await controller.pause();

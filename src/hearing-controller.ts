@@ -34,21 +34,48 @@ export class HearingController {
   }
 
   async start(room: RoomSummary): Promise<StartedHearing> {
+    return this.startRooms([room]);
+  }
+
+  async startAll(rooms: readonly RoomSummary[]): Promise<StartedHearing> {
+    return this.startRooms(rooms);
+  }
+
+  private async startRooms(
+    rooms: readonly RoomSummary[],
+  ): Promise<StartedHearing> {
     this.assertAvailable();
 
-    const participantIds = uniqueParticipantIds(room.participantIds);
-    if (participantIds.length === 0) throw new EmptyRoomError();
+    const roomMoves = rooms
+      .map((room) => ({
+        room,
+        participantIds: uniqueParticipantIds(room.participantIds),
+      }))
+      .filter(({ participantIds }) => participantIds.length > 0);
+    if (roomMoves.length === 0) throw new EmptyRoomError();
 
     this.busy = true;
     try {
-      await this.options.moveParticipants({
-        fromBreakoutUuid: room.id,
-        toRoomUuid: "main",
-        participants: [...participantIds],
-      });
+      const results = await Promise.allSettled(
+        roomMoves.map(({ room, participantIds }) =>
+          this.options.moveParticipants({
+            fromBreakoutUuid: room.id,
+            toRoomUuid: "main",
+            participants: [...participantIds],
+          }),
+        ),
+      );
+      const failedMove = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      );
+      if (failedMove) throw failedMove.reason;
       return {
-        roomName: room.name,
-        participantCount: participantIds.length,
+        roomName: roomMoves.map(({ room }) => room.name).join(", "),
+        participantCount: roomMoves.reduce(
+          (count, { participantIds }) => count + participantIds.length,
+          0,
+        ),
       };
     } finally {
       this.busy = false;
