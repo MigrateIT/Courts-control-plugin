@@ -113,7 +113,7 @@ try {
   await expectTitle(page, "hearing-return", "Pause hearing");
   await page
     .getByTestId("toast")
-    .filter({ hasText: "could not be updated" })
+    .filter({ hasText: "could not be fully updated" })
     .waitFor();
   await screenshot(page, "09-return-failure-active-state-retained.png");
 

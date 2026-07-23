@@ -27,6 +27,8 @@ describe("RoomDirectory", () => {
     expect(room?.id).toBe(roomA);
     expect(room?.name).toMatch(/^Waiting room /);
     expect(room?.participantIds).toEqual([]);
+    expect(room?.participantCount).toBeNull();
+    expect(room?.occupancy).toBe("unknown");
   });
 
   it("counts an unadmitted api participant from the room snapshot", () => {
@@ -38,14 +40,64 @@ describe("RoomDirectory", () => {
       id: roomA,
       name: "Case A",
       participantIds: [waitingPerson.uuid],
+      participantCount: 1,
+      occupancy: "occupied",
     });
   });
 
-  it("keeps an api observer out of the movable participant count", () => {
+  it("confirms an observer-only room is empty", () => {
     const directory = new RoomDirectory();
     directory.replaceParticipants(roomA, [observer]);
 
-    expect(directory.getBreakout(roomA)?.participantIds).toEqual([]);
+    expect(directory.getBreakout(roomA)).toMatchObject({
+      participantIds: [],
+      participantCount: 0,
+      occupancy: "empty",
+    });
+  });
+
+  it("keeps activity-only occupancy selectable with an unknown count", () => {
+    const directory = new RoomDirectory();
+    directory.recordBreakout(roomA);
+    directory.applyActivities([join(roomA, waitingPerson)]);
+
+    expect(directory.getBreakout(roomA)).toMatchObject({
+      participantIds: [waitingPerson.uuid],
+      participantCount: null,
+      occupancy: "occupied",
+    });
+  });
+
+  it("does not infer confirmed empty from activity-only roster data", () => {
+    const directory = new RoomDirectory();
+    directory.applyActivities([
+      join(roomA, waitingPerson),
+      leave(roomA, waitingPerson),
+    ]);
+
+    expect(directory.getBreakout(roomA)).toMatchObject({
+      participantIds: [],
+      participantCount: null,
+      occupancy: "unknown",
+    });
+  });
+
+  it("includes api participants identified as waiting by raw service type", () => {
+    const directory = new RoomDirectory();
+    const rawWaitingPerson = {
+      ...waitingPerson,
+      isWaiting: false,
+      serviceType: "conference",
+      rawData: { service_type: "waiting_room" },
+    } as unknown as InfinityParticipant;
+
+    directory.replaceParticipants(roomA, [observer, rawWaitingPerson]);
+
+    expect(directory.getBreakout(roomA)).toMatchObject({
+      participantIds: [rawWaitingPerson.uuid],
+      participantCount: 1,
+      occupancy: "occupied",
+    });
   });
 
   it("tracks later room moves through participant activities", () => {
@@ -56,7 +108,11 @@ describe("RoomDirectory", () => {
       join("main", waitingPerson),
     ]);
 
-    expect(directory.getBreakout(roomA)?.participantIds).toEqual([]);
+    expect(directory.getBreakout(roomA)).toMatchObject({
+      participantIds: [],
+      participantCount: 0,
+      occupancy: "empty",
+    });
   });
 
   it("reconciles a successful start when no move activity arrives", () => {
@@ -75,9 +131,11 @@ describe("RoomDirectory", () => {
 
     directory.recordParticipantsMovedToMain(roomA, [waitingPerson.uuid]);
 
-    expect(directory.getBreakout(roomA)?.participantIds).toEqual([
-      lateArrival.uuid,
-    ]);
+    expect(directory.getBreakout(roomA)).toMatchObject({
+      participantIds: [lateArrival.uuid],
+      participantCount: 1,
+      occupancy: "occupied",
+    });
   });
 
   it("sorts rooms by display name and ignores main status naming", () => {

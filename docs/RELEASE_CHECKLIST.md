@@ -11,6 +11,7 @@
 - [x] Runtime bundle has no external application dependency.
 - [x] Production and development dependency audits report zero known vulnerabilities.
 - [x] Browser RPC simulation validates two independent waiting rooms, sequential hearings, busy guards, and failure retention.
+- [x] Unit coverage distinguishes confirmed-empty rooms from rooms with unavailable snapshots; unavailable counts do not block a room-scoped Start.
 - [x] Real Webapp3 loads the exact production artifact and renders the chair-only toolbar control and native room-selection form.
 - [ ] Real Pexip accepts the selected-room-to-main request with an empty participant list, moves all eligible waiting participants, and leaves `api` observer legs in the breakout.
 - [ ] Real Pexip accepts the native `previous` destination with an empty participant list through the deployed Webapp3 plugin bridge.
@@ -25,7 +26,7 @@
 3. Open a low-impact conference with two disposable waiting rooms.
 4. Confirm only chair users see the two separate toolbar controls: play for **Start a case hearing** and pause for **Pause hearing and return participants to previous rooms**.
 5. Confirm both controls remain visible rather than replacing or toggling each other.
-6. Start one disposable case and verify both controls remain disabled for the complete 10-second Start hold and the second room count is unchanged.
+6. Start one disposable case and verify both controls remain disabled for the complete 10-second Start hold and the second room count is unchanged. Also confirm a room is hidden only after its participant snapshot establishes that it is empty.
 7. Confirm any `api` observer leg remains in the selected breakout after the case participants enter the main room.
 8. Pause it and verify the same people arrive back in the original room.
 9. Confirm another chair can use the independent Pause control without receiving state from the chair who started the hearing.

@@ -5,15 +5,19 @@ export type ParticipantSummary = {
   readonly isControlOnly: boolean;
 };
 
+export type RoomOccupancy = "unknown" | "empty" | "occupied";
+
 export type RoomSummary = {
   readonly id: Exclude<RoomID, "main">;
   readonly name: string;
   readonly participantIds: readonly ParticipantID[];
+  readonly participantCount: number | null;
+  readonly occupancy: RoomOccupancy;
 };
 
 export type StartedHearing = {
   readonly roomName: string;
-  readonly participantCount: number;
+  readonly participantCount: number | null;
 };
 
 export type MoveParticipantsRequest = {

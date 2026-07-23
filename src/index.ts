@@ -118,7 +118,7 @@ function returnLauncherPayload(busy: boolean) {
 async function selectAndStartHearing(): Promise<void> {
   const rooms = directory
     .listBreakouts()
-    .filter((room) => room.participantIds.length > 0);
+    .filter((room) => room.occupancy !== "empty");
   if (rooms.length === 0) {
     await showToast("noWaitingRooms", true);
     return;
@@ -151,7 +151,7 @@ async function selectAndStartHearing(): Promise<void> {
   if (input.room === allWaitingRoomsOption) {
     const availableRooms = directory
       .listBreakouts()
-      .filter((room) => room.participantIds.length > 0);
+      .filter((room) => room.occupancy !== "empty");
     if (availableRooms.length === 0) {
       await showToast("roomUnavailable", true);
       return;
@@ -161,7 +161,7 @@ async function selectAndStartHearing(): Promise<void> {
   }
 
   const selected = directory.getBreakout(input.room);
-  if (!selected || selected.participantIds.length === 0) {
+  if (!selected || selected.occupancy === "empty") {
     await showToast("roomUnavailable", true);
     return;
   }
@@ -184,10 +184,21 @@ async function startRooms(
       directory.recordParticipantsMovedToMain(room.id, room.participantIds);
     }
     scheduleReconcile();
-    await showToast(allRooms ? "hearingStartedAll" : "hearingStarted", false, {
-      count: started.participantCount,
-      room: started.roomName,
-    });
+    const countKnown = started.participantCount !== null;
+    await showToast(
+      allRooms
+        ? countKnown
+          ? "hearingStartedAll"
+          : "hearingStartedAllCountUnknown"
+        : countKnown
+          ? "hearingStarted"
+          : "hearingStartedCountUnknown",
+      false,
+      {
+        count: started.participantCount ?? 0,
+        room: started.roomName,
+      },
+    );
   } catch (error) {
     await reportActionError(error);
   } finally {
@@ -266,7 +277,10 @@ async function reportActionError(error: unknown): Promise<void> {
 function roomOption(room: RoomSummary): { id: string; label: string } {
   return {
     id: room.id,
-    label: `${room.name} (${room.participantIds.length})`,
+    label:
+      room.participantCount === null
+        ? `${room.name} (${translate(locale, "countUnavailable")})`
+        : `${room.name} (${room.participantCount})`,
   };
 }
 

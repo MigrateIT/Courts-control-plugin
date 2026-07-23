@@ -15,6 +15,7 @@ type RoomRecord = {
   id: BreakoutRoomId;
   name?: string;
   participants: Map<ParticipantID, ParticipantSummary>;
+  hasParticipantSnapshot: boolean;
 };
 
 export class RoomDirectory {
@@ -43,10 +44,8 @@ export class RoomDirectory {
     roomId: RoomID,
     participants: readonly InfinityParticipant[],
   ): void {
-    const target =
-      roomId === "main"
-        ? this.mainParticipants
-        : this.ensureRoom(roomId).participants;
+    const room = roomId === "main" ? undefined : this.ensureRoom(roomId);
+    const target = room?.participants ?? this.mainParticipants;
     const nextIds = new Set(participants.map(({ uuid }) => uuid));
 
     for (const existingId of target.keys()) {
@@ -55,6 +54,7 @@ export class RoomDirectory {
     for (const participant of participants) {
       this.moveParticipantToRoom(roomId, participant);
     }
+    if (room) room.hasParticipantSnapshot = true;
   }
 
   applyActivities(activities: readonly RoomParticipantActivity[]): void {
@@ -84,28 +84,24 @@ export class RoomDirectory {
 
   listBreakouts(): readonly RoomSummary[] {
     return [...this.rooms.values()]
-      .map((room) => ({
-        id: room.id,
-        name: room.name ?? fallbackRoomName(room.id),
-        participantIds: movableParticipantIds(room.participants),
-      }))
+      .map(roomSummary)
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
   getBreakout(roomId: string): RoomSummary | undefined {
     const room = this.rooms.get(roomId as BreakoutRoomId);
     if (!room) return undefined;
-    return {
-      id: room.id,
-      name: room.name ?? fallbackRoomName(room.id),
-      participantIds: movableParticipantIds(room.participants),
-    };
+    return roomSummary(room);
   }
 
   private ensureRoom(roomId: BreakoutRoomId): RoomRecord {
     const existing = this.rooms.get(roomId);
     if (existing) return existing;
-    const room: RoomRecord = { id: roomId, participants: new Map() };
+    const room: RoomRecord = {
+      id: roomId,
+      participants: new Map(),
+      hasParticipantSnapshot: false,
+    };
     this.rooms.set(roomId, room);
     return room;
   }
@@ -160,6 +156,24 @@ function movableParticipantIds(
   return [...participants.values()]
     .filter((participant) => !participant.isControlOnly)
     .map(({ uuid }) => uuid);
+}
+
+function roomSummary(room: RoomRecord): RoomSummary {
+  const participantIds = movableParticipantIds(room.participants);
+  return {
+    id: room.id,
+    name: room.name ?? fallbackRoomName(room.id),
+    participantIds,
+    participantCount: room.hasParticipantSnapshot
+      ? participantIds.length
+      : null,
+    occupancy:
+      participantIds.length > 0
+        ? "occupied"
+        : room.hasParticipantSnapshot
+          ? "empty"
+          : "unknown",
+  };
 }
 
 function fallbackRoomName(roomId: BreakoutRoomId): string {

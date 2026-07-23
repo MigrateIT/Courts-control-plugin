@@ -14,14 +14,18 @@ const translations = {
     noWaitingRooms: "No waiting room with participants is available.",
     roomUnavailable: "That waiting room is no longer available. Choose again.",
     hearingStarted: "{count} participant(s) admitted from {room}.",
+    hearingStartedCountUnknown: "Participants were admitted from {room}.",
     hearingStartedAll:
       "{count} participant(s) admitted from all waiting rooms.",
+    hearingStartedAllCountUnknown:
+      "Participants were admitted from all waiting rooms.",
     hearingCountdown: "Hearing starts in {seconds} second(s)…",
     hearingPaused: "Participants were returned to their previous rooms.",
     actionBusy: "Please wait for the current hearing action to finish.",
     actionFailed:
       "The hearing could not be fully updated. Check the waiting rooms before trying again.",
     roomFallback: "Waiting room {suffix}",
+    countUnavailable: "count unavailable",
   },
   nl: {
     toolbarStart: "Start een zaakzitting",
@@ -37,13 +41,17 @@ const translations = {
     noWaitingRooms: "Er is geen wachtruimte met deelnemers beschikbaar.",
     roomUnavailable: "Die wachtruimte is niet meer beschikbaar. Kies opnieuw.",
     hearingStarted: "{count} deelnemer(s) toegelaten uit {room}.",
+    hearingStartedCountUnknown: "Deelnemers toegelaten uit {room}.",
     hearingStartedAll: "{count} deelnemer(s) uit alle wachtruimten toegelaten.",
+    hearingStartedAllCountUnknown:
+      "Deelnemers uit alle wachtruimten toegelaten.",
     hearingCountdown: "De zitting start over {seconds} seconde(n)…",
     hearingPaused: "Deelnemers zijn teruggezet in hun vorige ruimte.",
     actionBusy: "Wacht tot de huidige zittingsactie is afgerond.",
     actionFailed:
       "De zitting kon niet volledig worden bijgewerkt. Controleer de wachtruimten voordat u het opnieuw probeert.",
     roomFallback: "Wachtruimte {suffix}",
+    countUnavailable: "aantal niet beschikbaar",
   },
 } as const;
 

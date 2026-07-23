@@ -46,7 +46,7 @@ export class HearingController {
   ): Promise<StartedHearing> {
     this.assertAvailable();
 
-    const roomMoves = rooms.filter((room) => room.participantIds.length > 0);
+    const roomMoves = rooms.filter((room) => room.occupancy !== "empty");
     if (roomMoves.length === 0) throw new EmptyRoomError();
 
     this.busy = true;
@@ -67,10 +67,14 @@ export class HearingController {
       if (failedMove) throw failedMove.reason;
       return {
         roomName: roomMoves.map(({ name }) => name).join(", "),
-        participantCount: roomMoves.reduce(
-          (count, { participantIds }) => count + participantIds.length,
-          0,
-        ),
+        participantCount: roomMoves.every(
+          ({ participantCount }) => participantCount !== null,
+        )
+          ? roomMoves.reduce(
+              (count, room) => count + (room.participantCount ?? 0),
+              0,
+            )
+          : null,
       };
     } finally {
       this.busy = false;

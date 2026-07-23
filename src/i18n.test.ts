@@ -21,5 +21,9 @@ describe("i18n", () => {
     expect(translate("en", "hearingCountdown", { seconds: 10 })).toBe(
       "Hearing starts in 10 second(s)…",
     );
+    expect(translate("en", "countUnavailable")).toBe("count unavailable");
+    expect(
+      translate("nl", "hearingStartedCountUnknown", { room: "Zaak A" }),
+    ).toBe("Deelnemers toegelaten uit Zaak A.");
   });
 });
