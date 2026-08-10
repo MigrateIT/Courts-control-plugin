@@ -40,7 +40,7 @@
       "hearingStartedAll": "{count} deelnemer(s) uit alle wachtruimten toegelaten.",
       "hearingStartedAllCountUnknown": "Deelnemers uit alle wachtruimten toegelaten.",
       "hearingCountdown": "De zitting start over {seconds} seconde(n)…",
-      "hearingPauseCountdown": "Deelnemers keren over {seconds} seconde(n) terug…",
+      "hearingPauseCountdown": "Deelnemers keren over {seconds} seconde(n) terug naar wachtruimte…",
       "hearingPaused": "Deelnemers zijn teruggezet in hun vorige ruimte.",
       "actionBusy": "Wacht tot de huidige zittingsactie is afgerond.",
       "actionFailed": "De zitting kon niet volledig worden bijgewerkt. Controleer de wachtruimten voordat u het opnieuw probeert.",
