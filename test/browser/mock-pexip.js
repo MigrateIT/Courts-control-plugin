@@ -59,6 +59,7 @@ const buttons = new Map();
 const previousRooms = new Map();
 let activityLocations = new Map();
 const moveRequests = [];
+const applicationMessages = [];
 let nextButtonId = 1;
 let moveDelay = 1200;
 let failNextMove = false;
@@ -72,6 +73,20 @@ window.mockPexip = {
   },
   moveRequests() {
     return structuredClone(moveRequests);
+  },
+  applicationMessages() {
+    return structuredClone(applicationMessages);
+  },
+  emitApplicationMessage({ id, userId, message }) {
+    emit("event:applicationMessage", {
+      at: new Date(),
+      id,
+      displayName:
+        rooms.get("main")?.participants.find(({ uuid }) => uuid === userId)
+          ?.displayName ?? "Conference participant",
+      userId,
+      message,
+    });
   },
   snapshot() {
     return Object.fromEntries(
@@ -136,6 +151,10 @@ async function handleRpc(call) {
         moveParticipants(call.payload);
         reply(call, { status: 200, data: { result: true } });
       }
+      break;
+    case "conference:sendApplicationMessage":
+      applicationMessages.push(structuredClone(call.payload));
+      reply(call, { status: 200, data: { status: "success", result: true } });
       break;
     default:
       reply(call, ok(`rpc-${Date.now()}`));

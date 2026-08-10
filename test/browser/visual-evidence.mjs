@@ -1,9 +1,12 @@
 import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import { chromium } from "playwright-core";
 
 const baseUrl = process.env.COURT_PLUGIN_TEST_URL ?? "http://127.0.0.1:5173";
 const evidenceDirectory = new URL("../../docs/evidence/", import.meta.url);
-await mkdir(evidenceDirectory, { recursive: true });
+const evidenceOutputDirectory =
+  process.env.COURT_PLUGIN_EVIDENCE_DIR ?? evidenceDirectory;
+await mkdir(evidenceOutputDirectory, { recursive: true });
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? "/snap/bin/chromium",
@@ -121,6 +124,9 @@ try {
   const moveRequests = await page.evaluate(() =>
     window.mockPexip.moveRequests(),
   );
+  const applicationMessages = await page.evaluate(() =>
+    window.mockPexip.applicationMessages(),
+  );
   if (
     snapshot.main.join(",") !==
       "clerk-chair,court-chair,case-b-bob,case-b-interpreter" ||
@@ -153,6 +159,55 @@ try {
       `Unexpected native return payloads: ${JSON.stringify(moveRequests)}`,
     );
   }
+  if (
+    applicationMessages.length !== 2 ||
+    applicationMessages.some(
+      ({ payload }) =>
+        payload?.pluginId !== "pause-resume-hearing-plugin" ||
+        payload?.protocolVersion !== 1 ||
+        payload?.type !== "hearing-countdown-started" ||
+        typeof payload?.operationId !== "string" ||
+        payload?.seconds !== 10,
+    )
+  ) {
+    throw new Error(
+      `Unexpected countdown broadcasts: ${JSON.stringify(applicationMessages)}`,
+    );
+  }
+
+  const remoteCountdown = {
+    pluginId: "pause-resume-hearing-plugin",
+    protocolVersion: 1,
+    type: "hearing-countdown-started",
+    operationId: "remote-countdown",
+    seconds: 10,
+  };
+  await page.evaluate(
+    (message) =>
+      window.mockPexip.emitApplicationMessage({
+        id: "chair-countdown-message",
+        userId: "court-chair",
+        message,
+      }),
+    remoteCountdown,
+  );
+  await page
+    .getByTestId("toast")
+    .filter({ hasText: "Hearing starts in 10 second(s)" })
+    .waitFor();
+  await page.evaluate(() =>
+    window.mockPexip.emitApplicationMessage({
+      id: "chair-countdown-cancel-message",
+      userId: "court-chair",
+      message: {
+        pluginId: "pause-resume-hearing-plugin",
+        protocolVersion: 1,
+        type: "hearing-countdown-cancelled",
+        operationId: "remote-countdown",
+      },
+    }),
+  );
+  await page.getByTestId("toast").waitFor({ state: "hidden" });
   if (pageErrors.length > 0) throw pageErrors[0];
 } finally {
   await browser.close();
@@ -170,7 +225,10 @@ async function expectTitle(page, testId, text) {
 
 async function screenshot(page, name) {
   await page.screenshot({
-    path: new URL(name, evidenceDirectory).pathname,
+    path:
+      typeof evidenceOutputDirectory === "string"
+        ? resolve(evidenceOutputDirectory, name)
+        : new URL(name, evidenceOutputDirectory).pathname,
     fullPage: true,
   });
 }

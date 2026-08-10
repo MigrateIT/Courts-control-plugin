@@ -21,7 +21,8 @@ The artifact is standalone:
 
 - no backend, database, MMM API, CDN, font, image, or network fetch dependency;
 - the Pexip public plugin SDK is bundled into `assets/index.js`;
-- no hearing state, participant history, browser storage, or application messages are used;
+- no durable hearing state, participant history, or browser storage is used;
+- a transient, namespaced Pexip application message shares the countdown with the other connected chairs;
 - Start and Pause are independent chair controls, so any chair can perform either operation;
 - no widget is used.
 
@@ -34,7 +35,7 @@ The chair toolbar intentionally displays two separate controls at the same time:
 - **Start a case hearing** uses the play icon and opens the waiting-room selector.
 - **Pause hearing and return participants to previous rooms** uses the pause icon and immediately requests the native previous-room return.
 
-This is not a single button that changes mode. Keeping both controls visible makes the available action explicit and allows any chair to pause a hearing without relying on local state from the chair who started it. During a Start, its 10-second countdown, or a Pause operation, both controls are temporarily disabled to prevent overlapping moves. They become available again when the operation and any required hold have completed.
+This is not a single button that changes mode. Keeping both controls visible makes the available action explicit and allows any chair to pause a hearing without relying on local state from the chair who started it. During a local Start, its 10-second countdown, or a Pause operation, both controls are temporarily disabled to prevent overlapping moves. They become available again when the operation and any required hold have completed.
 
 ## Safety behavior
 
@@ -42,7 +43,7 @@ This is not a single button that changes mode. Keeping both controls visible mak
 - Non-waiting Pexip `api` participants, such as MMM observer legs, are excluded from participant counts; observer-only rooms are not offered for Start. Unadmitted `api` participants whose state is `waiting_room` remain included and can be started.
 - Start uses `fromBreakoutUuid`, `toRoomUuid: "main"`, and an empty participant array. Pexip interprets this as moving all eligible participants from that room and retains non-movable `api` legs.
 - After Pexip accepts Start, the local room count removes the exact participants selected at initiation even if Webapp3 omits the corresponding move activity. Later roster events can still correct the state, and participants who arrived during the countdown are retained.
-- Starting shows a non-dismissible 10-second countdown that closes automatically.
+- Starting broadcasts a namespaced Pexip application message so every connected chair running the host-only plugin sees the same non-dismissible 10-second countdown in their own selected language. No chat message is created.
 - Admit-all sends one room-scoped move per occupied or not-yet-confirmed-empty waiting room at the same time.
 - Pause uses Pexip's standard `toRoomUuid: "previous"` destination with an empty participant list, allowing Pexip to return all eligible main-room participants to their server-recorded previous rooms.
 - The plugin never calls close-all or empty-all operations.

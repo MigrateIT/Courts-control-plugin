@@ -1,5 +1,15 @@
-import { registerPlugin, type Button, type RoomID } from "@pexip/plugin-api";
+import {
+  registerPlugin,
+  type Button,
+  type ParticipantID,
+  type RoomID,
+} from "@pexip/plugin-api";
 import { PLUGIN_ID, PLUGIN_VERSION } from "./constants";
+import {
+  countdownCancelledMessage,
+  countdownStartedMessage,
+  parseCountdownMessage,
+} from "./countdown-message";
 import {
   EmptyRoomError,
   HearingActionInProgressError,
@@ -21,6 +31,8 @@ let returnLauncher: Button<"toolbar"> | null = null;
 let meetingAvailable = false;
 let startHoldActive = false;
 let reconcileChain = Promise.resolve();
+let localParticipantId: ParticipantID | null = null;
+const remoteCountdowns = new Map<string, () => void>();
 
 const controller = new HearingController({
   moveParticipants: async (request: MoveParticipantsRequest) => {
@@ -61,6 +73,31 @@ plugin.events.participants.add(({ id, participants }) => {
 plugin.events.participantsActivities.add((activities) => {
   directory.applyActivities(activities);
   scheduleReconcile();
+});
+
+plugin.events.me.add(({ participant }) => {
+  localParticipantId = participant.uuid;
+});
+
+plugin.events.applicationMessage.add(({ message, userId }) => {
+  if (userId === localParticipantId) return;
+
+  const countdownMessage = parseCountdownMessage(message);
+  if (!countdownMessage) return;
+
+  if (countdownMessage.type === "hearing-countdown-cancelled") {
+    remoteCountdowns.get(countdownMessage.operationId)?.();
+    remoteCountdowns.delete(countdownMessage.operationId);
+    return;
+  }
+
+  if (remoteCountdowns.has(countdownMessage.operationId)) return;
+  const cancel = startRemoteCountdown(countdownMessage.seconds, () => {
+    if (remoteCountdowns.get(countdownMessage.operationId) === cancel) {
+      remoteCountdowns.delete(countdownMessage.operationId);
+    }
+  });
+  remoteCountdowns.set(countdownMessage.operationId, cancel);
 });
 
 plugin.events.languageSelect.add((language) => {
@@ -174,11 +211,15 @@ async function startRooms(
   allRooms: boolean,
 ): Promise<void> {
   startHoldActive = true;
+  const countdownOperationId = globalThis.crypto.randomUUID();
   try {
     scheduleReconcile();
     const start = allRooms
       ? controller.startAll(rooms)
       : controller.start(rooms[0]!);
+    broadcastCountdown(
+      countdownStartedMessage(countdownOperationId, countdownSeconds),
+    );
     const started = await withCountdown(start);
     for (const room of rooms) {
       directory.recordParticipantsMovedToMain(room.id, room.participantIds);
@@ -200,6 +241,7 @@ async function startRooms(
       },
     );
   } catch (error) {
+    broadcastCountdown(countdownCancelledMessage(countdownOperationId));
     await reportActionError(error);
   } finally {
     startHoldActive = false;
@@ -229,6 +271,40 @@ async function withCountdown<T>(action: Promise<T>): Promise<T> {
   } finally {
     globalThis.clearInterval(timer);
   }
+}
+
+function startRemoteCountdown(
+  initialSeconds: number,
+  onFinished: () => void,
+): () => void {
+  let seconds = initialSeconds;
+  let finished = false;
+  showCountdownToast(seconds);
+  const timer = globalThis.setInterval(() => {
+    seconds -= 1;
+    if (seconds > 0) {
+      showCountdownToast(seconds);
+    } else {
+      finish();
+    }
+  }, 1000);
+
+  function finish(): void {
+    if (finished) return;
+    finished = true;
+    globalThis.clearInterval(timer);
+    onFinished();
+  }
+
+  return finish;
+}
+
+function broadcastCountdown(payload: Record<string, unknown>): void {
+  void plugin.conference
+    .sendApplicationMessage({ payload })
+    .catch((error) =>
+      console.error("Court hearing countdown could not be shared", error),
+    );
 }
 
 function showCountdownToast(seconds: number): void {
