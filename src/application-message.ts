@@ -6,11 +6,14 @@ const countdownCancelled = "hearing-countdown-cancelled";
 const hearingStarted = "hearing-started";
 const hearingPaused = "hearing-paused";
 
+export type CountdownAction = "start" | "pause";
+
 export type HostApplicationMessage =
   | {
       readonly type: typeof countdownStarted;
       readonly operationId: string;
       readonly seconds: number;
+      readonly action: CountdownAction;
     }
   | {
       readonly type: typeof countdownCancelled;
@@ -31,8 +34,9 @@ export type HostApplicationMessage =
 export function countdownStartedMessage(
   operationId: string,
   seconds: number,
+  action: CountdownAction,
 ): Record<string, unknown> {
-  return envelope(countdownStarted, operationId, { seconds });
+  return envelope(countdownStarted, operationId, { seconds, action });
 }
 
 export function countdownCancelledMessage(
@@ -73,12 +77,18 @@ export function parseHostApplicationMessage(
   if (
     payload.type === countdownStarted &&
     isNonNegativeInteger(payload.seconds) &&
-    payload.seconds > 0
+    payload.seconds > 0 &&
+    (payload.action === undefined ||
+      payload.action === "start" ||
+      payload.action === "pause")
   ) {
     return {
       type: countdownStarted,
       operationId: payload.operationId,
       seconds: payload.seconds,
+      // Countdown messages from the preceding plugin release did not include
+      // an action. Treat them as Start during a rolling deployment.
+      action: payload.action ?? "start",
     };
   }
 

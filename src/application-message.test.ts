@@ -10,7 +10,7 @@ import {
 
 describe("host application messages", () => {
   it("creates and parses countdown messages", () => {
-    const started = countdownStartedMessage("operation-1", 10);
+    const started = countdownStartedMessage("operation-1", 10, "pause");
 
     expect(started).toEqual({
       pluginId: PLUGIN_ID,
@@ -18,11 +18,13 @@ describe("host application messages", () => {
       type: "hearing-countdown-started",
       operationId: "operation-1",
       seconds: 10,
+      action: "pause",
     });
     expect(parseHostApplicationMessage(started)).toMatchObject({
       type: "hearing-countdown-started",
       operationId: "operation-1",
       seconds: 10,
+      action: "pause",
     });
     expect(
       parseHostApplicationMessage(countdownCancelledMessage("operation-1")),
@@ -30,6 +32,18 @@ describe("host application messages", () => {
       type: "hearing-countdown-cancelled",
       operationId: "operation-1",
     });
+  });
+
+  it("treats countdowns from the preceding release as Start", () => {
+    expect(
+      parseHostApplicationMessage({
+        pluginId: PLUGIN_ID,
+        protocolVersion: 1,
+        type: "hearing-countdown-started",
+        operationId: "operation-1",
+        seconds: 10,
+      }),
+    ).toMatchObject({ action: "start" });
   });
 
   it("creates and parses hearing success messages", () => {
@@ -72,12 +86,25 @@ describe("host application messages", () => {
 
   it.each([
     {},
-    countdownStartedMessage("", 10),
-    countdownStartedMessage("operation-1", 0),
-    countdownStartedMessage("operation-1", 1.5),
-    { ...countdownStartedMessage("operation-1", 10), pluginId: "other" },
-    { ...countdownStartedMessage("operation-1", 10), protocolVersion: 2 },
-    { ...countdownStartedMessage("operation-1", 10), type: "other" },
+    countdownStartedMessage("", 10, "start"),
+    countdownStartedMessage("operation-1", 0, "start"),
+    countdownStartedMessage("operation-1", 1.5, "start"),
+    {
+      ...countdownStartedMessage("operation-1", 10, "start"),
+      pluginId: "other",
+    },
+    {
+      ...countdownStartedMessage("operation-1", 10, "start"),
+      protocolVersion: 2,
+    },
+    {
+      ...countdownStartedMessage("operation-1", 10, "start"),
+      type: "other",
+    },
+    {
+      ...countdownStartedMessage("operation-1", 10, "start"),
+      action: "other",
+    },
     {
       ...hearingStartedMessage("operation-2", {
         allRooms: false,

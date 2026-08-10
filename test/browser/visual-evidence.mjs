@@ -93,8 +93,18 @@ try {
 
   await returnControl.click();
   await expectTitle(page, "hearing-return", "Updating the hearing");
+  await page.waitForTimeout(2000);
+  if (!(await startControl.isDisabled())) {
+    throw new Error("Start was enabled before the pause countdown completed");
+  }
+  await expectTitle(page, "hearing-start", "Updating the hearing");
   await screenshot(page, "05-pausing-case-a-guarded.png");
   await expectTitle(page, "hearing-return", "Pause hearing");
+  if (await startControl.isDisabled()) {
+    throw new Error(
+      "Start remained disabled after the pause countdown completed",
+    );
+  }
   await page.getByTestId("toast").waitFor();
   await screenshot(page, "06-case-a-returned.png");
 
@@ -169,16 +179,26 @@ try {
   const pausedBroadcasts = applicationPayloads.filter(
     ({ type }) => type === "hearing-paused",
   );
+  const cancelledBroadcasts = applicationPayloads.filter(
+    ({ type }) => type === "hearing-countdown-cancelled",
+  );
   if (
-    applicationMessages.length !== 5 ||
+    applicationMessages.length !== 8 ||
     applicationPayloads.some(
       (payload) =>
         payload?.pluginId !== "pause-resume-hearing-plugin" ||
         payload?.protocolVersion !== 1 ||
         typeof payload?.operationId !== "string",
     ) ||
-    countdownBroadcasts.length !== 2 ||
-    countdownBroadcasts.some(({ seconds }) => seconds !== 10) ||
+    countdownBroadcasts.length !== 4 ||
+    countdownBroadcasts.some(
+      ({ seconds, action }) =>
+        seconds !== 10 || (action !== "start" && action !== "pause"),
+    ) ||
+    countdownBroadcasts.filter(({ action }) => action === "start").length !==
+      2 ||
+    countdownBroadcasts.filter(({ action }) => action === "pause").length !==
+      2 ||
     startedBroadcasts.length !== 2 ||
     startedBroadcasts.some(
       ({ allRooms, participantCount, roomName }) =>
@@ -187,7 +207,8 @@ try {
         typeof roomName !== "string" ||
         !roomName.startsWith("Case 2026-"),
     ) ||
-    pausedBroadcasts.length !== 1
+    pausedBroadcasts.length !== 1 ||
+    cancelledBroadcasts.length !== 1
   ) {
     throw new Error(
       `Unexpected hearing broadcasts: ${JSON.stringify(applicationMessages)}`,
@@ -200,6 +221,7 @@ try {
     type: "hearing-countdown-started",
     operationId: "remote-countdown",
     seconds: 10,
+    action: "start",
   };
   await page.evaluate(
     (message) =>
@@ -214,6 +236,10 @@ try {
     .getByTestId("toast")
     .filter({ hasText: "Hearing starts in 10 second(s)" })
     .waitFor();
+  await expectTitle(page, "hearing-start", "Updating the hearing");
+  if (!(await returnControl.isDisabled())) {
+    throw new Error("Pause was enabled during another host's countdown");
+  }
   await page.evaluate(() =>
     window.mockPexip.emitApplicationMessage({
       id: "chair-countdown-cancel-message",
@@ -227,6 +253,44 @@ try {
     }),
   );
   await page.getByTestId("toast").waitFor({ state: "hidden" });
+  await expectTitle(page, "hearing-start", "Start a case hearing");
+
+  const remotePauseCountdown = {
+    ...remoteCountdown,
+    operationId: "remote-pause-countdown",
+    action: "pause",
+  };
+  await page.evaluate(
+    (message) =>
+      window.mockPexip.emitApplicationMessage({
+        id: "chair-pause-countdown-message",
+        userId: "court-chair",
+        message,
+      }),
+    remotePauseCountdown,
+  );
+  await page
+    .getByTestId("toast")
+    .filter({ hasText: "Participants return in 10 second(s)" })
+    .waitFor();
+  await expectTitle(page, "hearing-return", "Updating the hearing");
+  if (!(await startControl.isDisabled())) {
+    throw new Error("Start was enabled during another host's Pause countdown");
+  }
+  await page.evaluate(() =>
+    window.mockPexip.emitApplicationMessage({
+      id: "chair-pause-countdown-cancel-message",
+      userId: "court-chair",
+      message: {
+        pluginId: "pause-resume-hearing-plugin",
+        protocolVersion: 1,
+        type: "hearing-countdown-cancelled",
+        operationId: "remote-pause-countdown",
+      },
+    }),
+  );
+  await page.getByTestId("toast").waitFor({ state: "hidden" });
+  await expectTitle(page, "hearing-return", "Pause hearing");
 
   await page.evaluate(() =>
     window.mockPexip.emitApplicationMessage({

@@ -14,6 +14,7 @@ export const translationKeys = [
   "hearingStartedAll",
   "hearingStartedAllCountUnknown",
   "hearingCountdown",
+  "hearingPauseCountdown",
   "hearingPaused",
   "actionBusy",
   "actionFailed",

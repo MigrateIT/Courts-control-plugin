@@ -11,6 +11,7 @@ import {
   hearingPausedMessage,
   hearingStartedMessage,
   parseHostApplicationMessage,
+  type CountdownAction,
 } from "./application-message";
 import { loadConfiguration } from "./configuration";
 import {
@@ -44,7 +45,7 @@ const directory = new RoomDirectory((suffix) =>
 let startLauncher: Button<"toolbar"> | null = null;
 let returnLauncher: Button<"toolbar"> | null = null;
 let meetingAvailable = false;
-let startHoldActive = false;
+let actionHoldActive = false;
 let reconcileChain = Promise.resolve();
 let localParticipantId: ParticipantID | null = null;
 const remoteCountdowns = new Map<string, () => void>();
@@ -101,8 +102,7 @@ plugin.events.applicationMessage.add(({ message, userId }) => {
   if (!hostMessage) return;
 
   if (hostMessage.type === "hearing-countdown-cancelled") {
-    remoteCountdowns.get(hostMessage.operationId)?.();
-    remoteCountdowns.delete(hostMessage.operationId);
+    finishRemoteCountdown(hostMessage.operationId);
     return;
   }
 
@@ -113,16 +113,23 @@ plugin.events.applicationMessage.add(({ message, userId }) => {
     ) {
       return;
     }
-    const cancel = startRemoteCountdown(hostMessage.seconds, () => {
-      if (remoteCountdowns.get(hostMessage.operationId) === cancel) {
-        remoteCountdowns.delete(hostMessage.operationId);
-      }
-    });
+    const cancel = startRemoteCountdown(
+      hostMessage.action,
+      hostMessage.seconds,
+      () => {
+        if (remoteCountdowns.get(hostMessage.operationId) === cancel) {
+          remoteCountdowns.delete(hostMessage.operationId);
+          scheduleReconcile();
+        }
+      },
+    );
     remoteCountdowns.set(hostMessage.operationId, cancel);
+    scheduleReconcile();
     return;
   }
 
   if (hostMessage.type === "hearing-started") {
+    finishRemoteCountdown(hostMessage.operationId);
     void showToast(
       startedToastKey(hostMessage.allRooms, hostMessage.participantCount),
       false,
@@ -131,6 +138,7 @@ plugin.events.applicationMessage.add(({ message, userId }) => {
     return;
   }
 
+  finishRemoteCountdown(hostMessage.operationId);
   void showToast("hearingPaused").catch(reportSharedToastError);
 });
 
@@ -149,7 +157,7 @@ async function reconcileLauncher(): Promise<void> {
     return;
   }
 
-  const busy = controller.isBusy() || startHoldActive;
+  const busy = isHearingActionActive();
   if (!startLauncher) {
     startLauncher = await plugin.ui.addButton(startLauncherPayload(busy));
     startLauncher.onClick.add(() => void selectAndStartHearing());
@@ -187,6 +195,11 @@ function returnLauncherPayload(busy: boolean) {
 }
 
 async function selectAndStartHearing(): Promise<void> {
+  if (isHearingActionActive()) {
+    await showToast("actionBusy");
+    return;
+  }
+
   const rooms = directory
     .listBreakouts()
     .filter((room) => room.occupancy !== "empty");
@@ -219,6 +232,12 @@ async function selectAndStartHearing(): Promise<void> {
 
   if (!input?.room) return;
 
+  // Another host can start a countdown while this form is open.
+  if (isHearingActionActive()) {
+    await showToast("actionBusy");
+    return;
+  }
+
   if (input.room === allWaitingRoomsOption) {
     const availableRooms = directory
       .listBreakouts()
@@ -244,7 +263,12 @@ async function startRooms(
   rooms: readonly RoomSummary[],
   allRooms: boolean,
 ): Promise<void> {
-  startHoldActive = true;
+  if (isHearingActionActive()) {
+    await showToast("actionBusy");
+    return;
+  }
+
+  actionHoldActive = true;
   const operationId = globalThis.crypto.randomUUID();
   try {
     scheduleReconcile();
@@ -253,11 +277,11 @@ async function startRooms(
       : controller.start(rooms[0]!);
     if (countdownSeconds > 0) {
       broadcastCountdown(
-        countdownStartedMessage(operationId, countdownSeconds),
+        countdownStartedMessage(operationId, countdownSeconds, "start"),
       );
     }
     const started =
-      countdownSeconds > 0 ? await withCountdown(start) : await start;
+      countdownSeconds > 0 ? await withCountdown(start, "start") : await start;
     for (const room of rooms) {
       directory.recordParticipantsMovedToMain(room.id, room.participantIds);
     }
@@ -280,20 +304,23 @@ async function startRooms(
     }
     await reportActionError(error);
   } finally {
-    startHoldActive = false;
+    actionHoldActive = false;
     scheduleReconcile();
   }
 }
 
-async function withCountdown<T>(action: Promise<T>): Promise<T> {
+async function withCountdown<T>(
+  action: Promise<T>,
+  countdownAction: CountdownAction,
+): Promise<T> {
   let seconds = countdownSeconds;
-  showCountdownToast(seconds);
+  showCountdownToast(countdownAction, seconds);
   let timer: ReturnType<typeof globalThis.setInterval> | undefined;
   const countdown = new Promise<void>((resolve) => {
     timer = globalThis.setInterval(() => {
       seconds -= 1;
       if (seconds > 0) {
-        showCountdownToast(seconds);
+        showCountdownToast(countdownAction, seconds);
       } else {
         globalThis.clearInterval(timer);
         resolve();
@@ -310,16 +337,17 @@ async function withCountdown<T>(action: Promise<T>): Promise<T> {
 }
 
 function startRemoteCountdown(
+  countdownAction: CountdownAction,
   initialSeconds: number,
   onFinished: () => void,
 ): () => void {
   let seconds = initialSeconds;
   let finished = false;
-  showCountdownToast(seconds);
+  showCountdownToast(countdownAction, seconds);
   const timer = globalThis.setInterval(() => {
     seconds -= 1;
     if (seconds > 0) {
-      showCountdownToast(seconds);
+      showCountdownToast(countdownAction, seconds);
     } else {
       finish();
     }
@@ -333,6 +361,10 @@ function startRemoteCountdown(
   }
 
   return finish;
+}
+
+function finishRemoteCountdown(operationId: string): void {
+  remoteCountdowns.get(operationId)?.();
 }
 
 function broadcastCountdown(payload: Record<string, unknown>): void {
@@ -350,11 +382,20 @@ function broadcastApplicationMessage(
     );
 }
 
-function showCountdownToast(seconds: number): void {
+function showCountdownToast(
+  countdownAction: CountdownAction,
+  seconds: number,
+): void {
   void plugin.ui
     .showToast({
-      message: localize("hearingCountdown", { seconds }),
+      message: localize(
+        countdownAction === "start"
+          ? "hearingCountdown"
+          : "hearingPauseCountdown",
+        { seconds },
+      ),
       isInterrupt: true,
+      position: "topCenter",
       canDismiss: false,
       timeout: 1100,
     })
@@ -364,23 +405,41 @@ function showCountdownToast(seconds: number): void {
 }
 
 async function pauseHearing(): Promise<void> {
-  if (startHoldActive) {
+  if (isHearingActionActive()) {
     await showToast("actionBusy");
     return;
   }
 
+  actionHoldActive = true;
+  const operationId = globalThis.crypto.randomUUID();
   try {
     scheduleReconcile();
-    await controller.pause();
-    broadcastApplicationMessage(
-      hearingPausedMessage(globalThis.crypto.randomUUID()),
-    );
+    const pause = controller.pause();
+    if (countdownSeconds > 0) {
+      broadcastCountdown(
+        countdownStartedMessage(operationId, countdownSeconds, "pause"),
+      );
+    }
+    if (countdownSeconds > 0) {
+      await withCountdown(pause, "pause");
+    } else {
+      await pause;
+    }
+    broadcastApplicationMessage(hearingPausedMessage(operationId));
     await showToast("hearingPaused");
   } catch (error) {
+    if (countdownSeconds > 0) {
+      broadcastCountdown(countdownCancelledMessage(operationId));
+    }
     await reportActionError(error);
   } finally {
+    actionHoldActive = false;
     scheduleReconcile();
   }
+}
+
+function isHearingActionActive(): boolean {
+  return controller.isBusy() || actionHoldActive || remoteCountdowns.size > 0;
 }
 
 function startedToastKey(
