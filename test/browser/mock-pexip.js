@@ -6,13 +6,13 @@ const toastRoot = document.querySelector("#toast-root");
 const participants = {
   clerk: participant("clerk-chair", "Court clerk", true),
   court: participant("court-chair", "Presiding judge", true),
-  observerA: apiParticipant("mmm-observer-a", "MMM observer A"),
+  observerA: apiParticipant("pexip-observer-a", "Pexip observer A"),
   alice: participant("case-a-alice", "A. de Vries"),
   counsel: participant("case-a-counsel", "Counsel Jansen"),
-  observerB: apiParticipant("mmm-observer-b", "MMM observer B"),
+  observerB: apiParticipant("pexip-observer-b", "Pexip observer B"),
   bob: participant("case-b-bob", "B. Smit"),
   interpreter: participant("case-b-interpreter", "Interpreter Bakker"),
-  observerOnly: apiParticipant("mmm-observer-only", "MMM observer only"),
+  observerOnly: apiParticipant("pexip-observer-only", "Pexip observer only"),
 };
 
 const rooms = new Map([

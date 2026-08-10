@@ -141,9 +141,9 @@ try {
     snapshot.main.join(",") !==
       "clerk-chair,court-chair,case-b-bob,case-b-interpreter" ||
     snapshot["breakout-case-a"].join(",") !==
-      "mmm-observer-a,case-a-alice,case-a-counsel" ||
-    snapshot["breakout-case-b"].join(",") !== "mmm-observer-b" ||
-    snapshot["breakout-observer-only"].join(",") !== "mmm-observer-only"
+      "pexip-observer-a,case-a-alice,case-a-counsel" ||
+    snapshot["breakout-case-b"].join(",") !== "pexip-observer-b" ||
+    snapshot["breakout-observer-only"].join(",") !== "pexip-observer-only"
   ) {
     throw new Error(
       `Unexpected final room membership: ${JSON.stringify(snapshot)}`,

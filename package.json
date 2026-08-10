@@ -19,7 +19,6 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:browser:evidence": "node test/browser/visual-evidence.mjs",
-    "test:live:pexip": "node test/live/pexip-live-validation.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run build && npm run verify:dist"
   },
   "dependencies": {

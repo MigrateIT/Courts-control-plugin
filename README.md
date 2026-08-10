@@ -20,15 +20,13 @@ Point the Pexip Webapp3 plugin configuration at the deployed `index.html`. The o
 
 The artifact is standalone:
 
-- no backend, database, MMM API, CDN, font, image, or network fetch dependency;
+- no backend, database, external API, CDN, font, image, or network fetch dependency;
 - the Pexip public plugin SDK is bundled into `assets/index.js`;
 - no durable hearing state, participant history, or browser storage is used;
 - transient, namespaced Pexip application messages share Start and Pause countdowns and successful Start/Pause notices with the other connected chairs;
 - all localized UI copy and the countdown duration are loaded at runtime from `assets/configuration.json`;
 - Start and Pause are independent chair controls, so any chair can perform either operation;
 - no widget is used.
-
-MMM and its environment file are used only by the isolated live-validation script. They are not referenced by production code or included in `dist/`.
 
 ## Toolbar control design
 
@@ -42,7 +40,7 @@ This is not a single button that changes mode. Keeping both controls visible mak
 ## Safety behavior
 
 - The room selector excludes a breakout only after a complete room snapshot confirms that it has no waiting participants. Rooms whose snapshot has not arrived remain selectable and show **count unavailable**, so incomplete roster data cannot block Start. The final option remains **Admit all waiting rooms at once**.
-- Non-waiting Pexip `api` participants, such as MMM observer legs, are excluded from participant counts; observer-only rooms are not offered for Start. Unadmitted `api` participants whose state is `waiting_room` remain included and can be started.
+- Non-waiting Pexip `api` participants, such as control or observer legs, are excluded from participant counts; observer-only rooms are not offered for Start. Unadmitted `api` participants whose state is `waiting_room` remain included and can be started.
 - Start uses `fromBreakoutUuid`, `toRoomUuid: "main"`, and an empty participant array. Pexip interprets this as moving all eligible participants from that room and retains non-movable `api` legs.
 - After Pexip accepts Start, the local room count removes the exact participants selected at initiation even if Webapp3 omits the corresponding move activity. Later roster events can still correct the state, and participants who arrived during the countdown are retained.
 - Starting or pausing broadcasts a namespaced Pexip application message so every connected chair running the host-only plugin sees the matching configured, non-dismissible countdown in their own selected language. No chat message is created.
@@ -96,18 +94,10 @@ npm start -- --port 5175
 COURT_PLUGIN_TEST_URL=http://127.0.0.1:5175 npm run test:browser:evidence
 ```
 
-`npm run check` performs formatting, lint, TypeScript checking, coverage tests, a clean production build, and verifies that the complete tracked `dist/` artifact contains HTML, JavaScript, and an unchanged runtime configuration. The browser suite loads the real production plugin through a Pexip RPC simulator and regenerates nine screenshots.
-
-The authorized non-production Pexip validation is deliberately separate because it creates temporary rooms and participants:
-
-```bash
-npm run test:live:pexip
-```
-
-It uses the existing MMM test environment for credentials and join URLs, injects the exact `dist/` artifact only in its isolated browser context, creates two temporary case rooms, asserts the scoped Start payload and native previous-room Pause payload, observes Pexip SSE room membership, and cleans up in `finally`.
+`npm run check` performs formatting, lint, TypeScript checking, coverage tests, a clean production build, and verifies that the complete tracked `dist/` artifact contains HTML, JavaScript, and an unchanged runtime configuration. The browser suite loads the real production plugin through a self-contained Pexip RPC simulator and regenerates nine screenshots.
 
 See [release checklist](docs/RELEASE_CHECKLIST.md) and [visual evidence](docs/evidence/README.md).
 
 ## Upgrade policy
 
-The runtime surface is intentionally small and uses `@pexip/plugin-api` calls. Pexip's documented `previous` destination is passed through the plugin bridge even though version 22.2.0's TypeScript `RoomID` declaration omits it. Before upgrading the bundled SDK or Webapp3, run the complete check, browser evidence suite, and live validation.
+The runtime surface is intentionally small and uses `@pexip/plugin-api` calls. Pexip's documented `previous` destination is passed through the plugin bridge even though version 22.2.0's TypeScript `RoomID` declaration omits it. Before upgrading the bundled SDK or Webapp3, run the complete check and browser evidence suite.

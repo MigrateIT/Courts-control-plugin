@@ -16,7 +16,7 @@ const waitingPerson = participant(
   "api",
   true,
 );
-const observer = participant("mmm-observer", "MMM observer", "api", false);
+const observer = participant("pexip-observer", "Pexip observer", "api", false);
 
 describe("RoomDirectory", () => {
   it("lists a breakout as soon as Pexip announces it", () => {
