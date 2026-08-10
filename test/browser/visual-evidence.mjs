@@ -159,19 +159,38 @@ try {
       `Unexpected native return payloads: ${JSON.stringify(moveRequests)}`,
     );
   }
+  const applicationPayloads = applicationMessages.map(({ payload }) => payload);
+  const countdownBroadcasts = applicationPayloads.filter(
+    ({ type }) => type === "hearing-countdown-started",
+  );
+  const startedBroadcasts = applicationPayloads.filter(
+    ({ type }) => type === "hearing-started",
+  );
+  const pausedBroadcasts = applicationPayloads.filter(
+    ({ type }) => type === "hearing-paused",
+  );
   if (
-    applicationMessages.length !== 2 ||
-    applicationMessages.some(
-      ({ payload }) =>
+    applicationMessages.length !== 5 ||
+    applicationPayloads.some(
+      (payload) =>
         payload?.pluginId !== "pause-resume-hearing-plugin" ||
         payload?.protocolVersion !== 1 ||
-        payload?.type !== "hearing-countdown-started" ||
-        typeof payload?.operationId !== "string" ||
-        payload?.seconds !== 10,
-    )
+        typeof payload?.operationId !== "string",
+    ) ||
+    countdownBroadcasts.length !== 2 ||
+    countdownBroadcasts.some(({ seconds }) => seconds !== 10) ||
+    startedBroadcasts.length !== 2 ||
+    startedBroadcasts.some(
+      ({ allRooms, participantCount, roomName }) =>
+        allRooms !== false ||
+        participantCount !== 2 ||
+        typeof roomName !== "string" ||
+        !roomName.startsWith("Case 2026-"),
+    ) ||
+    pausedBroadcasts.length !== 1
   ) {
     throw new Error(
-      `Unexpected countdown broadcasts: ${JSON.stringify(applicationMessages)}`,
+      `Unexpected hearing broadcasts: ${JSON.stringify(applicationMessages)}`,
     );
   }
 
@@ -208,6 +227,44 @@ try {
     }),
   );
   await page.getByTestId("toast").waitFor({ state: "hidden" });
+
+  await page.evaluate(() =>
+    window.mockPexip.emitApplicationMessage({
+      id: "chair-started-message",
+      userId: "court-chair",
+      message: {
+        pluginId: "pause-resume-hearing-plugin",
+        protocolVersion: 1,
+        type: "hearing-started",
+        operationId: "remote-start",
+        allRooms: false,
+        participantCount: 3,
+        roomName: "Remote case",
+      },
+    }),
+  );
+  await page
+    .getByTestId("toast")
+    .filter({ hasText: "3 participant(s) admitted from Remote case." })
+    .waitFor();
+  await page.evaluate(() =>
+    window.mockPexip.emitApplicationMessage({
+      id: "chair-paused-message",
+      userId: "court-chair",
+      message: {
+        pluginId: "pause-resume-hearing-plugin",
+        protocolVersion: 1,
+        type: "hearing-paused",
+        operationId: "remote-pause",
+      },
+    }),
+  );
+  await page
+    .getByTestId("toast")
+    .filter({
+      hasText: "Participants were returned to their previous rooms.",
+    })
+    .waitFor();
   if (pageErrors.length > 0) throw pageErrors[0];
 } finally {
   await browser.close();

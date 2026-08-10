@@ -8,8 +8,10 @@ import { PLUGIN_ID, PLUGIN_VERSION } from "./constants";
 import {
   countdownCancelledMessage,
   countdownStartedMessage,
-  parseCountdownMessage,
-} from "./countdown-message";
+  hearingPausedMessage,
+  hearingStartedMessage,
+  parseHostApplicationMessage,
+} from "./application-message";
 import { loadConfiguration } from "./configuration";
 import {
   EmptyRoomError,
@@ -93,24 +95,43 @@ plugin.events.me.add(({ participant }) => {
 });
 
 plugin.events.applicationMessage.add(({ message, userId }) => {
-  if (countdownSeconds === 0 || userId === localParticipantId) return;
+  if (userId === localParticipantId) return;
 
-  const countdownMessage = parseCountdownMessage(message);
-  if (!countdownMessage) return;
+  const hostMessage = parseHostApplicationMessage(message);
+  if (!hostMessage) return;
 
-  if (countdownMessage.type === "hearing-countdown-cancelled") {
-    remoteCountdowns.get(countdownMessage.operationId)?.();
-    remoteCountdowns.delete(countdownMessage.operationId);
+  if (hostMessage.type === "hearing-countdown-cancelled") {
+    remoteCountdowns.get(hostMessage.operationId)?.();
+    remoteCountdowns.delete(hostMessage.operationId);
     return;
   }
 
-  if (remoteCountdowns.has(countdownMessage.operationId)) return;
-  const cancel = startRemoteCountdown(countdownMessage.seconds, () => {
-    if (remoteCountdowns.get(countdownMessage.operationId) === cancel) {
-      remoteCountdowns.delete(countdownMessage.operationId);
+  if (hostMessage.type === "hearing-countdown-started") {
+    if (
+      countdownSeconds === 0 ||
+      remoteCountdowns.has(hostMessage.operationId)
+    ) {
+      return;
     }
-  });
-  remoteCountdowns.set(countdownMessage.operationId, cancel);
+    const cancel = startRemoteCountdown(hostMessage.seconds, () => {
+      if (remoteCountdowns.get(hostMessage.operationId) === cancel) {
+        remoteCountdowns.delete(hostMessage.operationId);
+      }
+    });
+    remoteCountdowns.set(hostMessage.operationId, cancel);
+    return;
+  }
+
+  if (hostMessage.type === "hearing-started") {
+    void showToast(
+      startedToastKey(hostMessage.allRooms, hostMessage.participantCount),
+      false,
+      startedToastValues(hostMessage.participantCount, hostMessage.roomName),
+    ).catch(reportSharedToastError);
+    return;
+  }
+
+  void showToast("hearingPaused").catch(reportSharedToastError);
 });
 
 plugin.events.languageSelect.add((language) => {
@@ -224,16 +245,15 @@ async function startRooms(
   allRooms: boolean,
 ): Promise<void> {
   startHoldActive = true;
-  const countdownOperationId =
-    countdownSeconds > 0 ? globalThis.crypto.randomUUID() : undefined;
+  const operationId = globalThis.crypto.randomUUID();
   try {
     scheduleReconcile();
     const start = allRooms
       ? controller.startAll(rooms)
       : controller.start(rooms[0]!);
-    if (countdownOperationId) {
+    if (countdownSeconds > 0) {
       broadcastCountdown(
-        countdownStartedMessage(countdownOperationId, countdownSeconds),
+        countdownStartedMessage(operationId, countdownSeconds),
       );
     }
     const started =
@@ -242,24 +262,21 @@ async function startRooms(
       directory.recordParticipantsMovedToMain(room.id, room.participantIds);
     }
     scheduleReconcile();
-    const countKnown = started.participantCount !== null;
+    broadcastApplicationMessage(
+      hearingStartedMessage(operationId, {
+        allRooms,
+        participantCount: started.participantCount,
+        roomName: started.roomName,
+      }),
+    );
     await showToast(
-      allRooms
-        ? countKnown
-          ? "hearingStartedAll"
-          : "hearingStartedAllCountUnknown"
-        : countKnown
-          ? "hearingStarted"
-          : "hearingStartedCountUnknown",
+      startedToastKey(allRooms, started.participantCount),
       false,
-      {
-        count: started.participantCount ?? 0,
-        room: started.roomName,
-      },
+      startedToastValues(started.participantCount, started.roomName),
     );
   } catch (error) {
-    if (countdownOperationId) {
-      broadcastCountdown(countdownCancelledMessage(countdownOperationId));
+    if (countdownSeconds > 0) {
+      broadcastCountdown(countdownCancelledMessage(operationId));
     }
     await reportActionError(error);
   } finally {
@@ -319,10 +336,17 @@ function startRemoteCountdown(
 }
 
 function broadcastCountdown(payload: Record<string, unknown>): void {
+  broadcastApplicationMessage(payload, "countdown");
+}
+
+function broadcastApplicationMessage(
+  payload: Record<string, unknown>,
+  description = "hearing update",
+): void {
   void plugin.conference
     .sendApplicationMessage({ payload })
     .catch((error) =>
-      console.error("Court hearing countdown could not be shared", error),
+      console.error(`Court ${description} could not be shared`, error),
     );
 }
 
@@ -348,12 +372,43 @@ async function pauseHearing(): Promise<void> {
   try {
     scheduleReconcile();
     await controller.pause();
+    broadcastApplicationMessage(
+      hearingPausedMessage(globalThis.crypto.randomUUID()),
+    );
     await showToast("hearingPaused");
   } catch (error) {
     await reportActionError(error);
   } finally {
     scheduleReconcile();
   }
+}
+
+function startedToastKey(
+  allRooms: boolean,
+  participantCount: number | null,
+): TranslationKey {
+  const countKnown = participantCount !== null;
+  return allRooms
+    ? countKnown
+      ? "hearingStartedAll"
+      : "hearingStartedAllCountUnknown"
+    : countKnown
+      ? "hearingStarted"
+      : "hearingStartedCountUnknown";
+}
+
+function startedToastValues(
+  participantCount: number | null,
+  roomName: string,
+): Readonly<Record<string, string | number>> {
+  return {
+    count: participantCount ?? 0,
+    room: roomName,
+  };
+}
+
+function reportSharedToastError(error: unknown): void {
+  console.error("Shared court hearing update could not be shown", error);
 }
 
 async function reportActionError(error: unknown): Promise<void> {
