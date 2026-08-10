@@ -40,7 +40,7 @@ export default [
     languageOptions: { globals: globals.browser },
   },
   {
-    files: ["test/browser/*.mjs", "test/live/*.mjs"],
+    files: ["test/browser/*.mjs", "test/live/*.mjs", "tools/*.mjs"],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   prettier,

@@ -20,19 +20,19 @@ const observer = participant("mmm-observer", "MMM observer", "api", false);
 
 describe("RoomDirectory", () => {
   it("lists a breakout as soon as Pexip announces it", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     directory.recordBreakout(roomA);
 
     const [room] = directory.listBreakouts();
     expect(room?.id).toBe(roomA);
-    expect(room?.name).toMatch(/^Waiting room /);
+    expect(room?.name).toBe("Fallback breakout");
     expect(room?.participantIds).toEqual([]);
     expect(room?.participantCount).toBeNull();
     expect(room?.occupancy).toBe("unknown");
   });
 
   it("counts an unadmitted api participant from the room snapshot", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     directory.recordConferenceStatus(roomA, status("Case A"));
     directory.replaceParticipants(roomA, [observer, waitingPerson]);
 
@@ -46,7 +46,7 @@ describe("RoomDirectory", () => {
   });
 
   it("confirms an observer-only room is empty", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     directory.replaceParticipants(roomA, [observer]);
 
     expect(directory.getBreakout(roomA)).toMatchObject({
@@ -57,7 +57,7 @@ describe("RoomDirectory", () => {
   });
 
   it("keeps activity-only occupancy selectable with an unknown count", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     directory.recordBreakout(roomA);
     directory.applyActivities([join(roomA, waitingPerson)]);
 
@@ -69,7 +69,7 @@ describe("RoomDirectory", () => {
   });
 
   it("does not infer confirmed empty from activity-only roster data", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     directory.applyActivities([
       join(roomA, waitingPerson),
       leave(roomA, waitingPerson),
@@ -83,7 +83,7 @@ describe("RoomDirectory", () => {
   });
 
   it("includes api participants identified as waiting by raw service type", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     const rawWaitingPerson = {
       ...waitingPerson,
       isWaiting: false,
@@ -101,7 +101,7 @@ describe("RoomDirectory", () => {
   });
 
   it("tracks later room moves through participant activities", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     directory.replaceParticipants(roomA, [observer, waitingPerson]);
     directory.applyActivities([
       leave(roomA, waitingPerson),
@@ -116,7 +116,7 @@ describe("RoomDirectory", () => {
   });
 
   it("reconciles a successful start when no move activity arrives", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     const lateArrival = participant(
       "late-arrival",
       "Late Arrival",
@@ -139,7 +139,7 @@ describe("RoomDirectory", () => {
   });
 
   it("sorts rooms by display name and ignores main status naming", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     directory.recordConferenceStatus(roomA, status("Zulu"));
     directory.recordConferenceStatus(roomB, status("Alpha"));
     directory.recordConferenceStatus("main", status("Ignored"));
@@ -151,13 +151,17 @@ describe("RoomDirectory", () => {
   });
 
   it("removes a room when Pexip announces breakout end", () => {
-    const directory = new RoomDirectory();
+    const directory = roomDirectory();
     directory.recordBreakout(roomA);
     directory.removeBreakout(roomA);
 
     expect(directory.getBreakout(roomA)).toBeUndefined();
   });
 });
+
+function roomDirectory(): RoomDirectory {
+  return new RoomDirectory((suffix) => `Fallback ${suffix || "unknown"}`);
+}
 
 function participant(
   id: string,

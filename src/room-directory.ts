@@ -25,6 +25,8 @@ export class RoomDirectory {
     ParticipantSummary
   >();
 
+  constructor(private readonly fallbackRoomName: (suffix: string) => string) {}
+
   recordBreakout(roomId: BreakoutRoomId): void {
     this.ensureRoom(roomId);
   }
@@ -84,14 +86,14 @@ export class RoomDirectory {
 
   listBreakouts(): readonly RoomSummary[] {
     return [...this.rooms.values()]
-      .map(roomSummary)
+      .map((room) => roomSummary(room, this.fallbackRoomName))
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
   getBreakout(roomId: string): RoomSummary | undefined {
     const room = this.rooms.get(roomId as BreakoutRoomId);
     if (!room) return undefined;
-    return roomSummary(room);
+    return roomSummary(room, this.fallbackRoomName);
   }
 
   private ensureRoom(roomId: BreakoutRoomId): RoomRecord {
@@ -158,11 +160,14 @@ function movableParticipantIds(
     .map(({ uuid }) => uuid);
 }
 
-function roomSummary(room: RoomRecord): RoomSummary {
+function roomSummary(
+  room: RoomRecord,
+  fallbackRoomName: (suffix: string) => string,
+): RoomSummary {
   const participantIds = movableParticipantIds(room.participants);
   return {
     id: room.id,
-    name: room.name ?? fallbackRoomName(room.id),
+    name: room.name ?? fallbackRoomName(roomIdSuffix(room.id)),
     participantIds,
     participantCount: room.hasParticipantSnapshot
       ? participantIds.length
@@ -176,7 +181,6 @@ function roomSummary(room: RoomRecord): RoomSummary {
   };
 }
 
-function fallbackRoomName(roomId: BreakoutRoomId): string {
-  const suffix = String(roomId).replaceAll("-", "").slice(0, 8);
-  return `Waiting room ${suffix || "unknown"}`;
+function roomIdSuffix(roomId: BreakoutRoomId): string {
+  return String(roomId).replaceAll("-", "").slice(0, 8);
 }

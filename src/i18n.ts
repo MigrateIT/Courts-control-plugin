@@ -1,72 +1,45 @@
+export const translationKeys = [
+  "toolbarStart",
+  "toolbarReturn",
+  "toolbarBusy",
+  "selectTitle",
+  "selectDescription",
+  "selectRoom",
+  "selectAll",
+  "selectSubmit",
+  "noWaitingRooms",
+  "roomUnavailable",
+  "hearingStarted",
+  "hearingStartedCountUnknown",
+  "hearingStartedAll",
+  "hearingStartedAllCountUnknown",
+  "hearingCountdown",
+  "hearingPaused",
+  "actionBusy",
+  "actionFailed",
+  "roomFallback",
+  "countUnavailable",
+] as const;
+
 export type Locale = "en" | "nl";
-
-const translations = {
-  en: {
-    toolbarStart: "Start a case hearing",
-    toolbarReturn: "Pause hearing and return participants to previous rooms",
-    toolbarBusy: "Updating the hearing…",
-    selectTitle: "Start case hearing",
-    selectDescription:
-      "Choose one waiting room or admit all waiting rooms at once. Only the participants currently waiting will be admitted to the main hearing.",
-    selectRoom: "Waiting room",
-    selectAll: "Admit all waiting rooms at once",
-    selectSubmit: "Start hearing",
-    noWaitingRooms: "No waiting room with participants is available.",
-    roomUnavailable: "That waiting room is no longer available. Choose again.",
-    hearingStarted: "{count} participant(s) admitted from {room}.",
-    hearingStartedCountUnknown: "Participants were admitted from {room}.",
-    hearingStartedAll:
-      "{count} participant(s) admitted from all waiting rooms.",
-    hearingStartedAllCountUnknown:
-      "Participants were admitted from all waiting rooms.",
-    hearingCountdown: "Hearing starts in {seconds} second(s)…",
-    hearingPaused: "Participants were returned to their previous rooms.",
-    actionBusy: "Please wait for the current hearing action to finish.",
-    actionFailed:
-      "The hearing could not be fully updated. Check the waiting rooms before trying again.",
-    roomFallback: "Waiting room {suffix}",
-    countUnavailable: "count unavailable",
-  },
-  nl: {
-    toolbarStart: "Start een zaakzitting",
-    toolbarReturn:
-      "Pauzeer de zitting en zet deelnemers terug in hun vorige ruimte",
-    toolbarBusy: "De zitting wordt bijgewerkt…",
-    selectTitle: "Online zitting starten",
-    selectDescription:
-      "Kies één wachtruimte of laat alle wachtruimten tegelijk toe. Alleen deelnemers die nu wachten, worden toegelaten tot de hoofdzitting.",
-    selectRoom: "Wachtruimte",
-    selectAll: "Alle wachtruimten tegelijk toelaten",
-    selectSubmit: "Zitting starten",
-    noWaitingRooms: "Er is geen wachtruimte met deelnemers beschikbaar.",
-    roomUnavailable: "Die wachtruimte is niet meer beschikbaar. Kies opnieuw.",
-    hearingStarted: "{count} deelnemer(s) toegelaten uit {room}.",
-    hearingStartedCountUnknown: "Deelnemers toegelaten uit {room}.",
-    hearingStartedAll: "{count} deelnemer(s) uit alle wachtruimten toegelaten.",
-    hearingStartedAllCountUnknown:
-      "Deelnemers uit alle wachtruimten toegelaten.",
-    hearingCountdown: "De zitting start over {seconds} seconde(n)…",
-    hearingPaused: "Deelnemers zijn teruggezet in hun vorige ruimte.",
-    actionBusy: "Wacht tot de huidige zittingsactie is afgerond.",
-    actionFailed:
-      "De zitting kon niet volledig worden bijgewerkt. Controleer de wachtruimten voordat u het opnieuw probeert.",
-    roomFallback: "Wachtruimte {suffix}",
-    countUnavailable: "aantal niet beschikbaar",
-  },
-} as const;
-
-export type TranslationKey = keyof (typeof translations)["en"];
+export type TranslationKey = (typeof translationKeys)[number];
+export type TranslationCatalog = Readonly<Record<TranslationKey, string>>;
+export type Localization = Readonly<{
+  en: TranslationCatalog;
+  nl: Partial<TranslationCatalog>;
+}>;
 
 export function resolveLocale(language: string | undefined): Locale {
   return language?.toLowerCase().startsWith("nl") ? "nl" : "en";
 }
 
 export function translate(
+  localization: Localization,
   locale: Locale,
   key: TranslationKey,
   values: Readonly<Record<string, string | number>> = {},
 ): string {
-  let message: string = translations[locale][key];
+  let message = localization[locale][key] ?? localization.en[key];
   for (const [name, value] of Object.entries(values)) {
     message = message.replaceAll(`{${name}}`, String(value));
   }

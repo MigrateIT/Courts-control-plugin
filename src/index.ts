@@ -10,22 +10,35 @@ import {
   countdownStartedMessage,
   parseCountdownMessage,
 } from "./countdown-message";
+import { loadConfiguration } from "./configuration";
 import {
   EmptyRoomError,
   HearingActionInProgressError,
   HearingController,
 } from "./hearing-controller";
-import { resolveLocale, translate, type Locale } from "./i18n";
+import {
+  resolveLocale,
+  translate,
+  type Locale,
+  type TranslationKey,
+} from "./i18n";
 import { assertSuccessfulMoveResponse } from "./move-response";
 import { RoomDirectory } from "./room-directory";
 import type { MoveParticipantsRequest, RoomSummary } from "./types";
 
-const plugin = await registerPlugin({ id: PLUGIN_ID, version: PLUGIN_VERSION });
-const directory = new RoomDirectory();
+const [configuration, plugin] = await Promise.all([
+  loadConfiguration(
+    new URL("./assets/configuration.json", globalThis.location.href),
+  ),
+  registerPlugin({ id: PLUGIN_ID, version: PLUGIN_VERSION }),
+]);
 const allWaitingRoomsOption = "__all_waiting_rooms__";
-const countdownSeconds = 10;
+const countdownSeconds = configuration.countdownSeconds;
 
 let locale: Locale = resolveLocale(navigator.language);
+const directory = new RoomDirectory((suffix) =>
+  localize("roomFallback", { suffix }),
+);
 let startLauncher: Button<"toolbar"> | null = null;
 let returnLauncher: Button<"toolbar"> | null = null;
 let meetingAvailable = false;
@@ -80,7 +93,7 @@ plugin.events.me.add(({ participant }) => {
 });
 
 plugin.events.applicationMessage.add(({ message, userId }) => {
-  if (userId === localParticipantId) return;
+  if (countdownSeconds === 0 || userId === localParticipantId) return;
 
   const countdownMessage = parseCountdownMessage(message);
   if (!countdownMessage) return;
@@ -135,7 +148,7 @@ function startLauncherPayload(busy: boolean) {
     position: "toolbar" as const,
     roles: ["chair" as const],
     icon: "IconPlay",
-    tooltip: translate(locale, busy ? "toolbarBusy" : "toolbarStart"),
+    tooltip: localize(busy ? "toolbarBusy" : "toolbarStart"),
     isActive: false,
     isDisabled: busy,
   };
@@ -146,7 +159,7 @@ function returnLauncherPayload(busy: boolean) {
     position: "toolbar" as const,
     roles: ["chair" as const],
     icon: "IconPause",
-    tooltip: translate(locale, busy ? "toolbarBusy" : "toolbarReturn"),
+    tooltip: localize(busy ? "toolbarBusy" : "toolbarReturn"),
     isActive: false,
     isDisabled: busy,
   };
@@ -162,24 +175,24 @@ async function selectAndStartHearing(): Promise<void> {
   }
 
   const input = await plugin.ui.showForm({
-    title: translate(locale, "selectTitle"),
-    description: translate(locale, "selectDescription"),
+    title: localize("selectTitle"),
+    description: localize("selectDescription"),
     form: {
       elements: {
         room: {
-          name: translate(locale, "selectRoom"),
+          name: localize("selectRoom"),
           type: "select" as const,
           options: [
             ...rooms.map(roomOption),
             {
               id: allWaitingRoomsOption,
-              label: translate(locale, "selectAll"),
+              label: localize("selectAll"),
             },
           ],
           selected: rooms[0]?.id,
         },
       },
-      submitBtnTitle: translate(locale, "selectSubmit"),
+      submitBtnTitle: localize("selectSubmit"),
     },
   });
 
@@ -211,16 +224,20 @@ async function startRooms(
   allRooms: boolean,
 ): Promise<void> {
   startHoldActive = true;
-  const countdownOperationId = globalThis.crypto.randomUUID();
+  const countdownOperationId =
+    countdownSeconds > 0 ? globalThis.crypto.randomUUID() : undefined;
   try {
     scheduleReconcile();
     const start = allRooms
       ? controller.startAll(rooms)
       : controller.start(rooms[0]!);
-    broadcastCountdown(
-      countdownStartedMessage(countdownOperationId, countdownSeconds),
-    );
-    const started = await withCountdown(start);
+    if (countdownOperationId) {
+      broadcastCountdown(
+        countdownStartedMessage(countdownOperationId, countdownSeconds),
+      );
+    }
+    const started =
+      countdownSeconds > 0 ? await withCountdown(start) : await start;
     for (const room of rooms) {
       directory.recordParticipantsMovedToMain(room.id, room.participantIds);
     }
@@ -241,7 +258,9 @@ async function startRooms(
       },
     );
   } catch (error) {
-    broadcastCountdown(countdownCancelledMessage(countdownOperationId));
+    if (countdownOperationId) {
+      broadcastCountdown(countdownCancelledMessage(countdownOperationId));
+    }
     await reportActionError(error);
   } finally {
     startHoldActive = false;
@@ -310,7 +329,7 @@ function broadcastCountdown(payload: Record<string, unknown>): void {
 function showCountdownToast(seconds: number): void {
   void plugin.ui
     .showToast({
-      message: translate(locale, "hearingCountdown", { seconds }),
+      message: localize("hearingCountdown", { seconds }),
       isInterrupt: true,
       canDismiss: false,
       timeout: 1100,
@@ -355,23 +374,30 @@ function roomOption(room: RoomSummary): { id: string; label: string } {
     id: room.id,
     label:
       room.participantCount === null
-        ? `${room.name} (${translate(locale, "countUnavailable")})`
+        ? `${room.name} (${localize("countUnavailable")})`
         : `${room.name} (${room.participantCount})`,
   };
 }
 
 async function showToast(
-  key: Parameters<typeof translate>[1],
+  key: TranslationKey,
   isDanger = false,
   values?: Readonly<Record<string, string | number>>,
 ): Promise<void> {
   await plugin.ui.showToast({
-    message: translate(locale, key, values),
+    message: localize(key, values),
     isDanger,
     isInterrupt: true,
     canDismiss: true,
     timeout: 5000,
   });
+}
+
+function localize(
+  key: TranslationKey,
+  values?: Readonly<Record<string, string | number>>,
+): string {
+  return translate(configuration.localization, locale, key, values);
 }
 
 function asBreakoutRoomId(roomId: RoomID): Exclude<RoomID, "main"> {

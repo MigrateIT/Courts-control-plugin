@@ -12,6 +12,7 @@ Deploy only these generated files, preserving their relative path:
 dist/
 ├── index.html
 └── assets/
+    ├── configuration.json
     └── index.js
 ```
 
@@ -23,6 +24,7 @@ The artifact is standalone:
 - the Pexip public plugin SDK is bundled into `assets/index.js`;
 - no durable hearing state, participant history, or browser storage is used;
 - a transient, namespaced Pexip application message shares the countdown with the other connected chairs;
+- all localized UI copy and the countdown duration are loaded at runtime from `assets/configuration.json`;
 - Start and Pause are independent chair controls, so any chair can perform either operation;
 - no widget is used.
 
@@ -63,6 +65,22 @@ This is not a single button that changes mode. Keeping both controls visible mak
 
 The interface follows the Webapp3 language selection in English or Dutch.
 
+## Runtime configuration
+
+Edit [`public/assets/configuration.json`](public/assets/configuration.json) before building, or edit `dist/assets/configuration.json` directly in a deployment package. It is the single source for English and Dutch UI copy and the countdown duration:
+
+```json
+{
+  "countdownSeconds": 10,
+  "localization": {
+    "en": {},
+    "nl": {}
+  }
+}
+```
+
+`countdownSeconds` must be a whole number of zero or greater. Set it to `0` to disable local and shared countdown display. English is the required complete fallback catalog; a missing Dutch key falls back to English. The file is fetched without browser caching when the plugin starts, so changing deployment copy does not require rebuilding `index.js`.
+
 ## Build and verification
 
 Node.js 20.12.2 or newer is required for development only.
@@ -74,7 +92,7 @@ npm start -- --port 5175
 COURT_PLUGIN_TEST_URL=http://127.0.0.1:5175 npm run test:browser:evidence
 ```
 
-`npm run check` performs formatting, lint, TypeScript checking, coverage tests, and a clean production build. The browser suite loads the real production plugin through a Pexip RPC simulator and regenerates nine screenshots.
+`npm run check` performs formatting, lint, TypeScript checking, coverage tests, a clean production build, and verifies that the complete tracked `dist/` artifact contains HTML, JavaScript, and an unchanged runtime configuration. The browser suite loads the real production plugin through a Pexip RPC simulator and regenerates nine screenshots.
 
 The authorized non-production Pexip validation is deliberately separate because it creates temporary rooms and participants:
 

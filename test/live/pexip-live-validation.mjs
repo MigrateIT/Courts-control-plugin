@@ -13,6 +13,9 @@ const pluginHtml = await readFile(
 const pluginScript = await readFile(
   new URL("../../dist/assets/index.js", import.meta.url),
 );
+const pluginConfiguration = await readFile(
+  new URL("../../dist/assets/configuration.json", import.meta.url),
+);
 process.loadEnvFile(mmmEnvPath);
 
 const localBaseUrl = "https://localhost:3001";
@@ -184,6 +187,14 @@ try {
         status: 200,
         contentType: "text/javascript; charset=utf-8",
         body: pluginScript,
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/assets/configuration.json")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json; charset=utf-8",
+        body: pluginConfiguration,
       });
       return;
     }
