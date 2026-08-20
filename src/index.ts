@@ -217,13 +217,13 @@ async function selectAndStartHearing(): Promise<void> {
           name: localize("selectRoom"),
           type: "select" as const,
           options: [
-            ...rooms.map(roomOption),
             {
               id: allWaitingRoomsOption,
               label: localize("selectAll"),
             },
+            ...rooms.map(roomOption),
           ],
-          selected: rooms[0]?.id,
+          selected: allWaitingRoomsOption,
         },
       },
       submitBtnTitle: localize("selectSubmit"),
