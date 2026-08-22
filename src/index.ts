@@ -11,7 +11,6 @@ import {
   hearingPausedMessage,
   hearingStartedMessage,
   parseHostApplicationMessage,
-  type CountdownAction,
 } from "./application-message";
 import { loadConfiguration } from "./configuration";
 import {
@@ -113,23 +112,18 @@ plugin.events.applicationMessage.add(({ message, userId }) => {
     ) {
       return;
     }
-    const cancel = startRemoteCountdown(
-      hostMessage.action,
-      hostMessage.seconds,
-      () => {
-        if (remoteCountdowns.get(hostMessage.operationId) === cancel) {
-          remoteCountdowns.delete(hostMessage.operationId);
-          scheduleReconcile();
-        }
-      },
-    );
+    const cancel = startRemoteHold(hostMessage.seconds, () => {
+      if (remoteCountdowns.get(hostMessage.operationId) === cancel) {
+        remoteCountdowns.delete(hostMessage.operationId);
+        scheduleReconcile();
+      }
+    });
     remoteCountdowns.set(hostMessage.operationId, cancel);
     scheduleReconcile();
     return;
   }
 
   if (hostMessage.type === "hearing-started") {
-    finishRemoteCountdown(hostMessage.operationId);
     void showToast(
       startedToastKey(hostMessage.allRooms, hostMessage.participantCount),
       false,
@@ -138,7 +132,6 @@ plugin.events.applicationMessage.add(({ message, userId }) => {
     return;
   }
 
-  finishRemoteCountdown(hostMessage.operationId);
   void showToast("hearingPaused").catch(reportSharedToastError);
 });
 
@@ -232,7 +225,7 @@ async function selectAndStartHearing(): Promise<void> {
 
   if (!input?.room) return;
 
-  // Another host can start a countdown while this form is open.
+  // Another host can start an action hold while this form is open.
   if (isHearingActionActive()) {
     await showToast("actionBusy");
     return;
@@ -270,6 +263,8 @@ async function startRooms(
 
   actionHoldActive = true;
   const operationId = globalThis.crypto.randomUUID();
+  const hold =
+    countdownSeconds > 0 ? startActionHold(countdownSeconds) : undefined;
   try {
     scheduleReconcile();
     const start = allRooms
@@ -280,8 +275,7 @@ async function startRooms(
         countdownStartedMessage(operationId, countdownSeconds, "start"),
       );
     }
-    const started =
-      countdownSeconds > 0 ? await withCountdown(start, "start") : await start;
+    const started = await start;
     for (const room of rooms) {
       directory.recordParticipantsMovedToMain(room.id, room.participantIds);
     }
@@ -298,65 +292,53 @@ async function startRooms(
       false,
       startedToastValues(started.participantCount, started.roomName),
     );
+    await hold?.completed;
   } catch (error) {
+    hold?.cancel();
     if (countdownSeconds > 0) {
       broadcastCountdown(countdownCancelledMessage(operationId));
     }
     await reportActionError(error);
   } finally {
+    hold?.cancel();
     actionHoldActive = false;
     scheduleReconcile();
   }
 }
 
-async function withCountdown<T>(
-  action: Promise<T>,
-  countdownAction: CountdownAction,
-): Promise<T> {
-  let seconds = countdownSeconds;
-  showCountdownToast(countdownAction, seconds);
-  let timer: ReturnType<typeof globalThis.setInterval> | undefined;
-  const countdown = new Promise<void>((resolve) => {
-    timer = globalThis.setInterval(() => {
-      seconds -= 1;
-      if (seconds > 0) {
-        showCountdownToast(countdownAction, seconds);
-      } else {
-        globalThis.clearInterval(timer);
-        resolve();
-      }
-    }, 1000);
+function startActionHold(seconds: number): {
+  readonly completed: Promise<void>;
+  cancel: () => void;
+} {
+  let cancel: () => void = () => {};
+  const completed = new Promise<void>((resolve) => {
+    let finished = false;
+    const timer = globalThis.setTimeout(finish, seconds * 1000);
+
+    function finish(): void {
+      if (finished) return;
+      finished = true;
+      globalThis.clearTimeout(timer);
+      resolve();
+    }
+
+    cancel = finish;
   });
 
-  try {
-    const [result] = await Promise.all([action, countdown]);
-    return result;
-  } finally {
-    globalThis.clearInterval(timer);
-  }
+  return { completed, cancel };
 }
 
-function startRemoteCountdown(
-  countdownAction: CountdownAction,
+function startRemoteHold(
   initialSeconds: number,
   onFinished: () => void,
 ): () => void {
-  let seconds = initialSeconds;
   let finished = false;
-  showCountdownToast(countdownAction, seconds);
-  const timer = globalThis.setInterval(() => {
-    seconds -= 1;
-    if (seconds > 0) {
-      showCountdownToast(countdownAction, seconds);
-    } else {
-      finish();
-    }
-  }, 1000);
+  const timer = globalThis.setTimeout(finish, initialSeconds * 1000);
 
   function finish(): void {
     if (finished) return;
     finished = true;
-    globalThis.clearInterval(timer);
+    globalThis.clearTimeout(timer);
     onFinished();
   }
 
@@ -382,28 +364,6 @@ function broadcastApplicationMessage(
     );
 }
 
-function showCountdownToast(
-  countdownAction: CountdownAction,
-  seconds: number,
-): void {
-  void plugin.ui
-    .showToast({
-      message: localize(
-        countdownAction === "start"
-          ? "hearingCountdown"
-          : "hearingPauseCountdown",
-        { seconds },
-      ),
-      isInterrupt: true,
-      position: "topCenter",
-      canDismiss: false,
-      timeout: 1100,
-    })
-    .catch((error) => {
-      console.error("Court hearing countdown could not be shown", error);
-    });
-}
-
 async function pauseHearing(): Promise<void> {
   if (isHearingActionActive()) {
     await showToast("actionBusy");
@@ -412,6 +372,8 @@ async function pauseHearing(): Promise<void> {
 
   actionHoldActive = true;
   const operationId = globalThis.crypto.randomUUID();
+  const hold =
+    countdownSeconds > 0 ? startActionHold(countdownSeconds) : undefined;
   try {
     scheduleReconcile();
     const pause = controller.pause();
@@ -420,19 +382,18 @@ async function pauseHearing(): Promise<void> {
         countdownStartedMessage(operationId, countdownSeconds, "pause"),
       );
     }
-    if (countdownSeconds > 0) {
-      await withCountdown(pause, "pause");
-    } else {
-      await pause;
-    }
+    await pause;
     broadcastApplicationMessage(hearingPausedMessage(operationId));
     await showToast("hearingPaused");
+    await hold?.completed;
   } catch (error) {
+    hold?.cancel();
     if (countdownSeconds > 0) {
       broadcastCountdown(countdownCancelledMessage(operationId));
     }
     await reportActionError(error);
   } finally {
+    hold?.cancel();
     actionHoldActive = false;
     scheduleReconcile();
   }

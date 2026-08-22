@@ -23,8 +23,8 @@ The artifact is standalone:
 - no backend, database, external API, CDN, font, image, or network fetch dependency;
 - the Pexip public plugin SDK is bundled into `assets/index.js`;
 - no durable hearing state, participant history, or browser storage is used;
-- transient, namespaced Pexip application messages share Start and Pause countdowns and successful Start/Pause notices with the other connected chairs;
-- all localized UI copy and the countdown duration are loaded at runtime from `assets/configuration.json`;
+- transient, namespaced Pexip application messages share Start and Pause action holds and successful Start/Pause notices with the other connected chairs;
+- all localized UI copy and the action hold duration are loaded at runtime from `assets/configuration.json`;
 - Start and Pause are independent chair controls, so any chair can perform either operation;
 - no widget is used.
 
@@ -35,23 +35,22 @@ The chair toolbar intentionally displays two separate controls at the same time:
 - **Start a case hearing** uses the play icon and opens the waiting-room selector.
 - **Pause hearing and return participants to previous rooms** uses the pause icon and immediately requests the native previous-room return.
 
-This is not a single button that changes mode. Keeping both controls visible makes the available action explicit and allows any chair to pause a hearing without relying on local state from the chair who started it. During either action and its configured countdown, both controls are temporarily disabled to prevent overlapping moves. A countdown received from another connected chair applies the same hold locally, including to a Start form that was already open. The controls become available again when the operation and any required hold have completed.
+This is not a single button that changes mode. Keeping both controls visible makes the available action explicit and allows any chair to pause a hearing without relying on local state from the chair who started it. During either action and its configured hold, both controls are temporarily disabled to prevent overlapping moves. A hold received from another connected chair applies locally, including to a Start form that was already open. The controls become available again when the operation and any required hold have completed.
 
 ## Safety behavior
 
-- The room selector excludes a breakout only after a complete room snapshot confirms that it has no waiting participants. Rooms whose snapshot has not arrived remain selectable and show **count unavailable**, so incomplete roster data cannot block Start. The final option remains **Admit all waiting rooms at once**.
+- The room selector excludes a breakout only after a complete room snapshot confirms that it has no waiting participants. Rooms whose snapshot has not arrived remain selectable and show **count unavailable**, so incomplete roster data cannot block Start. **Admit all waiting rooms at once** is the first option and is selected by default.
 - Non-waiting Pexip `api` participants, such as control or observer legs, are excluded from participant counts; observer-only rooms are not offered for Start. Unadmitted `api` participants whose state is `waiting_room` remain included and can be started.
 - Start uses `fromBreakoutUuid`, `toRoomUuid: "main"`, and an empty participant array. Pexip interprets this as moving all eligible participants from that room and retains non-movable `api` legs.
-- After Pexip accepts Start, the local room count removes the exact participants selected at initiation even if Webapp3 omits the corresponding move activity. Later roster events can still correct the state, and participants who arrived during the countdown are retained.
-- Starting or pausing broadcasts a namespaced Pexip application message so every connected chair running the host-only plugin sees the matching configured, non-dismissible countdown in their own selected language. No chat message is created.
+- After Pexip accepts Start, the local room count removes the exact participants selected at initiation even if Webapp3 omits the corresponding move activity. Later roster events can still correct the state, and participants who arrived during the hold are retained.
+- Starting or pausing broadcasts a namespaced Pexip application message so every connected chair running the host-only plugin applies the same configured hold. No chat message or countdown toast is created.
 - A successful Start broadcasts its room scope, room name, and participant count so every connected chair sees the matching localized summary. Unknown counts retain the count-unavailable wording.
 - Admit-all sends one room-scoped move per occupied or not-yet-confirmed-empty waiting room at the same time.
 - Pause uses Pexip's standard `toRoomUuid: "previous"` destination with an empty participant list, allowing Pexip to return all eligible main-room participants to their server-recorded previous rooms.
 - A successful Pause broadcasts its localized confirmation to every connected chair.
 - The plugin never calls close-all or empty-all operations.
-- Actions are serialized within each plugin instance; repeated local clicks and submissions from a previously opened form cannot overlap a local or shared countdown.
-- The countdown is a UI display and control hold; the Pexip move request starts immediately, while the actual participant movement timing remains outside this plugin.
-- Webapp3 toasts cannot be updated in place. The numeric countdown therefore uses an interrupting toast at a fixed position; an exact single mutable counter would require a substantially heavier floating widget iframe.
+- Actions are serialized within each plugin instance; repeated local clicks and submissions from a previously opened form cannot overlap a local or shared hold.
+- The configured timer only controls how long Start and Pause remain unavailable for another action. The Pexip move request starts immediately, and no timer toast is shown.
 - An explicit Pexip rejection leaves both independent controls available for a safe retry.
 - Both the documented no-body success response and the newer `{ status: 200 }` response are supported.
 - Participant roster changes use the v38+ `participantsActivities` event. A room-scoped `participants` snapshot is retained only to seed participants who were already waiting when the plugin subscribed. The deprecated joined/left events are not used.
@@ -60,16 +59,16 @@ This is not a single button that changes mode. Keeping both controls visible mak
 
 1. Confirm that the separate play and pause controls are visible in the chair toolbar.
 2. Click the play button, labelled **Start a case hearing**.
-3. Choose one waiting room or the final **Admit all waiting rooms at once** option; current participant counts are shown.
+3. Keep the default first option, **Admit all waiting rooms at once**, or choose one waiting room; current participant counts are shown.
 4. Click **Start hearing**. Pexip admits all eligible participants from the selected room while leaving `api` observer legs in place.
-5. Any chair can use the separate pause button, labelled **Pause hearing and return participants to previous rooms**. Every connected chair sees the return countdown and both controls remain held until it completes. Pexip performs the return using its own previous-room assignments.
+5. Any chair can use the separate pause button, labelled **Pause hearing and return participants to previous rooms**. Both controls remain held for the configured duration without displaying a countdown. Pexip performs the return using its own previous-room assignments.
 6. Repeat for the next waiting room.
 
 The interface follows the Webapp3 language selection in English or Dutch.
 
 ## Runtime configuration
 
-Edit [`public/assets/configuration.json`](public/assets/configuration.json) before building, or edit `dist/assets/configuration.json` directly in a deployment package. It is the single source for English and Dutch UI copy and the countdown duration:
+Edit [`public/assets/configuration.json`](public/assets/configuration.json) before building, or edit `dist/assets/configuration.json` directly in a deployment package. It is the single source for English and Dutch UI copy and the action hold duration:
 
 ```json
 {
@@ -81,7 +80,7 @@ Edit [`public/assets/configuration.json`](public/assets/configuration.json) befo
 }
 ```
 
-`countdownSeconds` must be a whole number of zero or greater. It controls both Start and Pause countdowns. Set it to `0` to disable local and shared countdown display and its countdown hold. English is the required complete fallback catalog; a missing Dutch key falls back to English. The file is fetched without browser caching when the plugin starts, so changing deployment copy does not require rebuilding `index.js`.
+`countdownSeconds` must be a whole number of zero or greater. It controls only how long Start and Pause remain unavailable before another action can begin; it does not delay the Pexip move and does not display a countdown. Set it to `0` to remove the extra local and shared hold. English is the required complete fallback catalog; a missing Dutch key falls back to English. The file is fetched without browser caching when the plugin starts, so changing deployment copy does not require rebuilding `index.js`.
 
 ## Build and verification
 

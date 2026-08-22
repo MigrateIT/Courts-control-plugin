@@ -37,12 +37,6 @@ describe("i18n", () => {
     expect(translate(localization, "nl", "selectTitle")).toBe(
       "Online zitting starten",
     );
-    expect(
-      translate(localization, "en", "hearingCountdown", { seconds: 10 }),
-    ).toBe("Hearing starts in 10 second(s)…");
-    expect(
-      translate(localization, "nl", "hearingPauseCountdown", { seconds: 10 }),
-    ).toBe("Deelnemers keren over 10 seconde(n) terug naar wachtruimte…");
     expect(translate(localization, "en", "countUnavailable")).toBe(
       "count unavailable",
     );

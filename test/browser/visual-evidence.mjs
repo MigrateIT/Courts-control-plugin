@@ -37,12 +37,18 @@ try {
     .allTextContents();
   if (
     options.length !== 3 ||
-    options[0] !== "Case 2026-0412 (2)" ||
-    options[1] !== "Case 2026-0413 (2)" ||
-    options.at(-1) !== "Admit all waiting rooms at once" ||
+    options[0] !== "Admit all waiting rooms at once" ||
+    options[1] !== "Case 2026-0412 (2)" ||
+    options[2] !== "Case 2026-0413 (2)" ||
     options.some((option) => option.includes("Observer only"))
   ) {
-    throw new Error(`Unexpected final room option: ${JSON.stringify(options)}`);
+    throw new Error(`Unexpected room options: ${JSON.stringify(options)}`);
+  }
+  if (
+    (await page.getByTestId("room-select").inputValue()) !==
+    "__all_waiting_rooms__"
+  ) {
+    throw new Error("Admit all waiting rooms was not selected by default");
   }
   await page.getByTestId("form-close").click();
   await page.waitForTimeout(100);
@@ -52,6 +58,7 @@ try {
 
   await startControl.click();
   await page.getByTestId("room-form").waitFor();
+  await page.getByTestId("room-select").selectOption("breakout-case-a");
   await screenshot(page, "02-room-selection-case-a.png");
 
   await page
@@ -59,19 +66,22 @@ try {
     .getByRole("button", { name: "Start hearing" })
     .click();
   await expectTitle(page, "hearing-start", "Updating the hearing");
-  await page.waitForTimeout(2000);
+  await page.waitForFunction(
+    () => window.mockPexip.moveRequests().length === 1,
+  );
+  await page
+    .getByTestId("toast")
+    .filter({ hasText: "admitted from Case 2026-0412" })
+    .waitFor();
   if (!(await returnControl.isDisabled())) {
-    throw new Error("Pause was enabled before the start countdown completed");
+    throw new Error("Pause was enabled before the start hold completed");
   }
   await expectTitle(page, "hearing-return", "Updating the hearing");
   await screenshot(page, "03-starting-case-a-guarded.png");
   await expectTitle(page, "hearing-start", "Start a case hearing");
   if (await returnControl.isDisabled()) {
-    throw new Error(
-      "Pause remained disabled after the start countdown completed",
-    );
+    throw new Error("Pause remained disabled after the start hold completed");
   }
-  await page.getByTestId("toast").waitFor();
   await screenshot(page, "04-case-a-active-success.png");
 
   await startControl.click();
@@ -82,8 +92,8 @@ try {
     .allTextContents();
   if (
     optionsAfterStart.length !== 2 ||
-    optionsAfterStart[0] !== "Case 2026-0413 (2)" ||
-    optionsAfterStart[1] !== "Admit all waiting rooms at once"
+    optionsAfterStart[0] !== "Admit all waiting rooms at once" ||
+    optionsAfterStart[1] !== "Case 2026-0413 (2)"
   ) {
     throw new Error(
       `Moved participants remained in the room count: ${JSON.stringify(optionsAfterStart)}`,
@@ -93,19 +103,22 @@ try {
 
   await returnControl.click();
   await expectTitle(page, "hearing-return", "Updating the hearing");
-  await page.waitForTimeout(2000);
+  await page.waitForFunction(
+    () => window.mockPexip.moveRequests().length === 2,
+  );
+  await page
+    .getByTestId("toast")
+    .filter({ hasText: "returned to their previous rooms" })
+    .waitFor();
   if (!(await startControl.isDisabled())) {
-    throw new Error("Start was enabled before the pause countdown completed");
+    throw new Error("Start was enabled before the pause hold completed");
   }
   await expectTitle(page, "hearing-start", "Updating the hearing");
   await screenshot(page, "05-pausing-case-a-guarded.png");
   await expectTitle(page, "hearing-return", "Pause hearing");
   if (await startControl.isDisabled()) {
-    throw new Error(
-      "Start remained disabled after the pause countdown completed",
-    );
+    throw new Error("Start remained disabled after the pause hold completed");
   }
-  await page.getByTestId("toast").waitFor();
   await screenshot(page, "06-case-a-returned.png");
 
   await startControl.click();
@@ -116,9 +129,18 @@ try {
     .getByRole("button", { name: "Start hearing" })
     .click();
   await expectTitle(page, "hearing-start", "Updating the hearing");
-  await expectTitle(page, "hearing-start", "Start a case hearing");
-  await page.getByTestId("toast").waitFor();
+  await page.waitForFunction(
+    () => window.mockPexip.moveRequests().length === 3,
+  );
+  await page
+    .getByTestId("toast")
+    .filter({ hasText: "admitted from Case 2026-0413" })
+    .waitFor();
+  if (!(await returnControl.isDisabled())) {
+    throw new Error("Pause was enabled before the second Start hold completed");
+  }
   await screenshot(page, "08-case-b-active-case-a-waiting.png");
+  await expectTitle(page, "hearing-start", "Start a case hearing");
 
   await page.evaluate(() => window.mockPexip.failNextMove());
   await returnControl.click();
@@ -232,13 +254,31 @@ try {
       }),
     remoteCountdown,
   );
-  await page
-    .getByTestId("toast")
-    .filter({ hasText: "Hearing starts in 10 second(s)" })
-    .waitFor();
   await expectTitle(page, "hearing-start", "Updating the hearing");
   if (!(await returnControl.isDisabled())) {
-    throw new Error("Pause was enabled during another host's countdown");
+    throw new Error("Pause was enabled during another host's action hold");
+  }
+  await page.evaluate(() =>
+    window.mockPexip.emitApplicationMessage({
+      id: "chair-countdown-success-message",
+      userId: "court-chair",
+      message: {
+        pluginId: "pause-resume-hearing-plugin",
+        protocolVersion: 1,
+        type: "hearing-started",
+        operationId: "remote-countdown",
+        allRooms: false,
+        participantCount: 3,
+        roomName: "Remote case",
+      },
+    }),
+  );
+  await page
+    .getByTestId("toast")
+    .filter({ hasText: "3 participant(s) admitted from Remote case." })
+    .waitFor();
+  if (!(await returnControl.isDisabled())) {
+    throw new Error("Another host's success ended the action hold early");
   }
   await page.evaluate(() =>
     window.mockPexip.emitApplicationMessage({
@@ -252,7 +292,6 @@ try {
       },
     }),
   );
-  await page.getByTestId("toast").waitFor({ state: "hidden" });
   await expectTitle(page, "hearing-start", "Start a case hearing");
 
   const remotePauseCountdown = {
@@ -269,13 +308,30 @@ try {
       }),
     remotePauseCountdown,
   );
-  await page
-    .getByTestId("toast")
-    .filter({ hasText: "Participants return in 10 second(s)" })
-    .waitFor();
   await expectTitle(page, "hearing-return", "Updating the hearing");
   if (!(await startControl.isDisabled())) {
-    throw new Error("Start was enabled during another host's Pause countdown");
+    throw new Error("Start was enabled during another host's Pause hold");
+  }
+  await page.evaluate(() =>
+    window.mockPexip.emitApplicationMessage({
+      id: "chair-pause-countdown-success-message",
+      userId: "court-chair",
+      message: {
+        pluginId: "pause-resume-hearing-plugin",
+        protocolVersion: 1,
+        type: "hearing-paused",
+        operationId: "remote-pause-countdown",
+      },
+    }),
+  );
+  await page
+    .getByTestId("toast")
+    .filter({
+      hasText: "Participants were returned to their previous rooms.",
+    })
+    .waitFor();
+  if (!(await startControl.isDisabled())) {
+    throw new Error("Another host's Pause success ended the hold early");
   }
   await page.evaluate(() =>
     window.mockPexip.emitApplicationMessage({
@@ -289,7 +345,6 @@ try {
       },
     }),
   );
-  await page.getByTestId("toast").waitFor({ state: "hidden" });
   await expectTitle(page, "hearing-return", "Pause hearing");
 
   await page.evaluate(() =>
@@ -329,6 +384,20 @@ try {
       hasText: "Participants were returned to their previous rooms.",
     })
     .waitFor();
+  const toastMessages = await page.evaluate(() =>
+    window.mockPexip.toastMessages(),
+  );
+  if (
+    toastMessages.some(
+      (message) =>
+        message.includes("Hearing starts in") ||
+        message.includes("Participants return in"),
+    )
+  ) {
+    throw new Error(
+      `A countdown toast was shown: ${JSON.stringify(toastMessages)}`,
+    );
+  }
   if (pageErrors.length > 0) throw pageErrors[0];
 } finally {
   await browser.close();

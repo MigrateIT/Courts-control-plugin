@@ -60,6 +60,7 @@ const previousRooms = new Map();
 let activityLocations = new Map();
 const moveRequests = [];
 const applicationMessages = [];
+const toastMessages = [];
 let nextButtonId = 1;
 let moveDelay = 1200;
 let failNextMove = false;
@@ -76,6 +77,9 @@ window.mockPexip = {
   },
   applicationMessages() {
     return structuredClone(applicationMessages);
+  },
+  toastMessages() {
+    return structuredClone(toastMessages);
   },
   emitApplicationMessage({ id, userId, message }) {
     emit("event:applicationMessage", {
@@ -336,6 +340,7 @@ function renderForm(id, payload) {
 }
 
 function renderToast(payload) {
+  toastMessages.push(payload.message);
   const toast = document.createElement("div");
   toast.className = `toast${payload.isDanger ? " danger" : ""}`;
   toast.dataset.testid = "toast";
